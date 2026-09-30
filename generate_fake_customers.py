@@ -1,390 +1,369 @@
-"""Generate 100 fake KBC Compass-style customers. Synthetic data only."""
+"""Seed KBC Kompas: ~200 klanten, 12 maanden transacties, 3 demo-persona's."""
 from __future__ import annotations
 
 import csv
 import json
 import random
+import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 SEED = 20260930
 random.seed(SEED)
 
-OUT_DIR = Path(__file__).resolve().parent / "mathis data fake"
+ROOT = Path(__file__).resolve().parent
+DATA_DIR = ROOT / "data"
+OUT_DIR = ROOT / "mathis data fake"
+TODAY = date(2026, 9, 30)
+TX_START = date(2025, 10, 1)
 
 FIRST_M = [
-    "Mathis", "Noah", "Lucas", "Arthur", "Leon", "Finn", "Jules", "Lars",
-    "Wout", "Daan", "Milan", "Tibo", "Seppe", "Vince", "Stan", "Mats", "Kobe",
-    "Bram", "Jens", "Robbe", "Senne", "Louis", "Hugo", "Nathan", "Theo",
-    "Raphael", "Maxime", "Antoine", "Pierre",
+    "Noah", "Lucas", "Arthur", "Leon", "Finn", "Jules", "Lars", "Wout", "Daan",
+    "Milan", "Tibo", "Seppe", "Vince", "Stan", "Mats", "Kobe", "Bram", "Jens",
+    "Robbe", "Senne", "Louis", "Hugo", "Nathan", "Theo", "Maxime", "Pierre",
 ]
 FIRST_F = [
     "Lien", "Emma", "Louise", "Olivia", "Mila", "Ella", "Nora", "Sofie", "Fien",
     "Lotte", "Amber", "Jade", "Nina", "Luna", "Fleur", "Eva", "Noor", "Hanne",
     "Elise", "Marie", "Julie", "Laura", "Camille", "Chloe", "Manon", "Lea",
-    "Ines", "Zoe", "Alice", "Clara",
 ]
 LAST = [
     "Peeters", "Janssens", "Maes", "Jacobs", "Mertens", "Willems", "Claes",
     "Goossens", "Wouters", "De Smet", "Vermeulen", "De Vos", "Pauwels",
-    "Lambert", "Dupont", "Martin", "Dubois", "Laurent", "Simon", "Michel",
-    "Declercq", "Van den Berg", "De Clercq", "Van Damme", "Hermans",
-    "Smets", "Coppens", "Aerts", "Verstraeten", "Cools", "De Cock",
-    "Van Dyck", "Baert", "Desmet", "Vandenberghe", "Lemmens", "Bosmans",
+    "Lambert", "Dupont", "Martin", "Dubois", "Hermans", "Smets", "Coppens",
+    "Aerts", "Cools", "Lemmens", "Bosmans", "Declercq",
+]
+CITIES = ["Leuven", "Mechelen", "Antwerpen", "Gent", "Brugge", "Hasselt", "Aalst", "Kortrijk", "Brussel"]
+EXPENSE_CATS = [
+    ("boodschappen", 180, 420),
+    ("horeca", 40, 220),
+    ("transport", 30, 160),
+    ("abonnementen", 15, 55),
+    ("shopping", 20, 180),
+    ("energie", 60, 160),
 ]
 
-CITIES = [
-    ("Leuven", "3000", "Vlaams-Brabant", "nl"),
-    ("Mechelen", "2800", "Antwerpen", "nl"),
-    ("Antwerpen", "2000", "Antwerpen", "nl"),
-    ("Gent", "9000", "Oost-Vlaanderen", "nl"),
-    ("Brugge", "8000", "West-Vlaanderen", "nl"),
-    ("Hasselt", "3500", "Limburg", "nl"),
-    ("Aalst", "9300", "Oost-Vlaanderen", "nl"),
-    ("Kortrijk", "8500", "West-Vlaanderen", "nl"),
-    ("Turnhout", "2300", "Antwerpen", "nl"),
-    ("Sint-Niklaas", "9100", "Oost-Vlaanderen", "nl"),
-    ("Brussel", "1000", "Brussel", "fr"),
-    ("Brussel", "1050", "Brussel", "fr"),
-    ("Vilvoorde", "1800", "Vlaams-Brabant", "nl"),
-    ("Genk", "3600", "Limburg", "nl"),
-    ("Oostende", "8400", "West-Vlaanderen", "nl"),
-    ("Roeselare", "8800", "West-Vlaanderen", "nl"),
-    ("Dendermonde", "9200", "Oost-Vlaanderen", "nl"),
-    ("Lier", "2500", "Antwerpen", "nl"),
-    ("Tienen", "3300", "Vlaams-Brabant", "nl"),
-    ("Waregem", "8790", "West-Vlaanderen", "nl"),
-]
-
-STREETS = [
-    "Kerkstraat", "Stationsstraat", "Dorpsstraat", "Nieuwstraat", "Schoolstraat",
-    "Molenstraat", "Kasteelstraat", "Veldstraat", "Bosstraat", "Langestraat",
-    "Rue de la Loi", "Avenue Louise", "Naamsestraat", "Bondgenotenlaan",
-    "Grote Markt", "Meir", "Veldkantstraat", "Tiensevest",
-]
-
-OCCUPATIONS = [
-    "software developer", "verpleegkundige", "leerkracht", "boekhouder",
-    "projectleider", "verkoper", "ingenieur", "HR-medewerker", "jurist",
-    "zelfstandige bakker", "chauffeur", "apotheker", "architect",
-    "marketing manager", "data analist", "elektricien", "kok",
-    "politieagent", "civil servant", "student-jobber", "pensioen",
-]
-
-EMPLOYMENT = [
-    "voltijds loontrekkende", "deeltijds loontrekkende", "zelfstandige",
-    "ambtenaar", "werkzoekend", "student", "pensioen",
-]
-
-MARITAL = ["alleenstaand", "samenwonend", "gehuwd", "gescheiden", "weduwe/weduwnaar"]
-HOUSING = ["eigenaar met hypotheek", "eigenaar zonder hypotheek", "huurder", "inwonend bij ouders"]
-RISK = ["defensief", "neutraal", "dynamisch", "zeer dynamisch"]
-CHANNELS = ["KBC Mobile", "KBC Touch", "kantoor", "telefoon", "chat"]
-BRANCHES = [
-    "KBC Leuven centrum", "KBC Mechelen", "KBC Antwerpen Meir", "KBC Gent Zuid",
-    "KBC Brugge", "KBC Hasselt", "KBC Brussel Louise", "KBC Kortrijk",
-    "KBC Turnhout", "KBC Aalst",
-]
-LIFE_EVENTS = [
-    "geen",
-    "verhuis gepland",
-    "eerste kind verwacht",
-    "tweede kind verwacht",
-    "huwelijk gepland",
-    "scheiding in behandeling",
-    "nieuwe job",
-    "start als zelfstandige",
-    "pensioen binnen 24 maanden",
-    "woning kopen",
-    "woning verkopen",
-    "auto vervangen",
-    "studie kind start",
-    "erfenis ontvangen",
-    "langdurige ziekte",
-]
-INTENTS = [
-    "sparen opbouwen",
-    "woningfinanciering",
-    "beleggingsadvies",
-    "pensioenplanning",
-    "verzekering herzien",
-    "liquiditeit nodig",
-    "kinderen beschermen",
-    "duurzaam beleggen",
-    "schulden verminderen",
-    "digitaliseren van bankieren",
-]
-NBA = [
-    "gesprek woningkrediet",
-    "hospitalisatieverzekering voorstellen",
-    "pensioensparen activeren",
-    "beleggingsprofiel actualiseren",
-    "brandverzekering updaten na verhuis",
-    "automatisch sparen opzetten",
-    "KBC Mobile onboarding",
-    "overlijdensdekking herzien",
-    "budgetcoach in Mobile",
-    "termijnrekening voor overtollige cash",
-    "autoverzekering hernieuwen",
-    "geen actie",
-]
+GOAL_TYPES_BY_SITUATIE = {
+    "student": ["kot", "reis"],
+    "starter": ["eerste_auto", "reis", "kot", "woning"],
+    "koppel": ["woning", "gezin", "reis"],
+    "gezin": ["woning", "gezin", "eerste_auto", "pensioen"],
+    "pensioen": ["pensioen", "reis"],
+}
 
 
-def iban(i: int) -> str:
-    return f"BE71 968 {1000000 + i:07d}"
+def months_between(start: date, end: date) -> list[date]:
+    cur = date(start.year, start.month, 1)
+    out = []
+    while cur <= end:
+        out.append(cur)
+        if cur.month == 12:
+            cur = date(cur.year + 1, 1, 1)
+        else:
+            cur = date(cur.year, cur.month + 1, 1)
+    return out
 
 
-def birth_date(age: int) -> str:
-    today = date(2026, 9, 30)
-    b = today.replace(year=today.year - age) - timedelta(days=random.randint(0, 364))
-    return b.isoformat()
+def random_day(year: int, month: int, lo: int = 1, hi: int = 28) -> date:
+    return date(year, month, random.randint(lo, hi))
 
 
-def make_customer(i: int) -> dict:
-    n = i + 1
-    city, postal, province, lang = random.choice(CITIES)
-    gender = random.choices(["vrouw", "man", "x"], weights=[48, 48, 4])[0]
+def add_months(d: date, months: int) -> date:
+    m = d.month - 1 + months
+    y = d.year + m // 12
+    m = m % 12 + 1
+    day = min(d.day, 28)
+    return date(y, m, day)
+
+
+def load_catalog() -> dict:
+    return json.loads((DATA_DIR / "catalog" / "goals.json").read_text(encoding="utf-8"))
+
+
+def catalog_by_type(catalog: dict) -> dict:
+    return {g["type"]: g for g in catalog["doelen"]}
+
+
+def make_transactions(klant_id: str, inkomen: float, housing_cost: float, extra_cats: list[tuple] | None = None) -> list[tuple]:
+    rows = []
+    extra = extra_cats or []
+    for m in months_between(TX_START, TODAY):
+        rows.append((klant_id, random_day(m.year, m.month, 1, 4).isoformat(), round(inkomen, 2), "loon"))
+        if housing_cost > 0:
+            rows.append((klant_id, random_day(m.year, m.month, 1, 6).isoformat(), round(-housing_cost, 2), "huisvesting"))
+        for cat, lo, hi in EXPENSE_CATS + extra:
+            amount = round(-random.uniform(lo, hi), 2)
+            rows.append((klant_id, random_day(m.year, m.month, 5, 27).isoformat(), amount, cat))
+            if random.random() < 0.35:
+                rows.append((klant_id, random_day(m.year, m.month, 8, 28).isoformat(), round(-random.uniform(8, 45), 2), cat))
+    return rows
+
+
+def pick_goals(klant_id: str, situatie: str, catalog: dict, saved: float) -> list[tuple]:
+    types = GOAL_TYPES_BY_SITUATIE[situatie]
+    n = 1 if random.random() < 0.55 else 2
+    chosen = random.sample(types, k=min(n, len(types)))
+    goals = []
+    remaining = saved
+    for t in chosen:
+        meta = catalog[t]
+        bedrag = round(random.uniform(meta["kost_min_eur"], min(meta["kost_typisch_eur"] * 1.2, meta["kost_max_eur"])), 2)
+        months = random.randint(meta["minimale_termijn_maanden"], meta["minimale_termijn_maanden"] + 18)
+        deadline = add_months(TODAY, months).isoformat()
+        part = round(remaining * random.uniform(0.2, 0.7), 2) if remaining > 0 else 0.0
+        remaining = max(0.0, remaining - part)
+        goals.append((klant_id, t, bedrag, deadline, part, "actief"))
+    return goals
+
+
+def persona_lisa(catalog: dict) -> dict:
+    inkomen = 1180.0
+    huis = 480.0
+    txs = make_transactions("lisa", inkomen, huis, extra_cats=[("studie", 20, 70)])
+    return {
+        "klant": ("lisa", "Lisa", "Vandenberghe", 21, "student", inkomen, 2100.0, "Leuven", "nl", "lisa", None),
+        "doelen": [
+            ("lisa", "kot", 4500.0, "2027-08-15", 1400.0, "actief"),
+            ("lisa", "reis", 1800.0, "2027-07-01", 700.0, "actief"),
+        ],
+        "transacties": txs,
+        "events": [],
+        "simulate": [
+            {
+                "type": "verrassing_uitgave",
+                "datum": TODAY.isoformat(),
+                "bedrag": -620.0,
+                "categorie": "onverwachte_uitgave",
+                "toelichting": "Laptop kapot, herstelling 620 euro.",
+            },
+            {
+                "type": "nieuwe_job",
+                "datum": TODAY.isoformat(),
+                "bedrag": 450.0,
+                "categorie": "loon",
+                "toelichting": "Weekendjob erbij, +450 euro per maand.",
+            },
+        ],
+    }
+
+
+def persona_koppel(catalog: dict) -> dict:
+    inkomen = 4200.0
+    huis = 1100.0
+    txs = make_transactions("koppel", inkomen, huis)
+    return {
+        "klant": ("koppel", "Jan", "Peeters", 29, "koppel", inkomen, 18500.0, "Mechelen", "nl", "koppel", "hh-koppel"),
+        "partner": ("koppel-lotte", "Lotte", "Peeters", 28, "koppel", 2400.0, 6200.0, "Mechelen", "nl", "koppel", "hh-koppel"),
+        "doelen": [
+            ("koppel", "woning", 45000.0, "2029-06-01", 15200.0, "actief"),
+            ("koppel", "gezin", 8000.0, "2028-03-01", 2100.0, "actief"),
+        ],
+        "transacties": txs,
+        "events": [
+            ("koppel", "2026-06-12", "inkomenswijziging", 300.0, "Jan krijgt opslag van 300 euro."),
+        ],
+        "simulate": [
+            {
+                "type": "verrassing_uitgave",
+                "datum": TODAY.isoformat(),
+                "bedrag": -2400.0,
+                "categorie": "onverwachte_uitgave",
+                "toelichting": "Autopech, factuur 2400 euro.",
+            }
+        ],
+    }
+
+
+def persona_gezin(catalog: dict) -> dict:
+    inkomen = 3900.0
+    huis = 1350.0
+    txs = make_transactions("gezinsvader", inkomen, huis, extra_cats=[("kinderen", 80, 220)])
+    return {
+        "klant": ("gezinsvader", "Tom", "Janssens", 41, "gezin", inkomen, 9400.0, "Gent", "nl", "gezinsvader", "hh-gezin"),
+        "doelen": [
+            ("gezinsvader", "eerste_auto", 12000.0, "2027-05-01", 3800.0, "actief"),
+            ("gezinsvader", "pensioen", 80000.0, "2045-09-01", 4100.0, "actief"),
+        ],
+        "transacties": txs,
+        "events": [
+            ("gezinsvader", "2026-04-02", "nieuwe_job", 0.0, "Nieuwe job, inkomen stabiel maar andere ritmes."),
+        ],
+        "simulate": [
+            {
+                "type": "verrassing_uitgave",
+                "datum": TODAY.isoformat(),
+                "bedrag": -1800.0,
+                "categorie": "onverwachte_uitgave",
+                "toelichting": "Wasbak en leidingen, 1800 euro.",
+            }
+        ],
+    }
+
+
+def random_klant(i: int, catalog: dict) -> dict:
+    kid = f"KBC-{i:04d}"
+    roll = random.random()
+    if roll < 0.18:
+        situatie, age = "student", random.randint(18, 24)
+        inkomen = round(random.uniform(700, 1400), 2)
+        huis = round(random.uniform(0, 520), 2)
+        gender = random.choice(["vrouw", "man"])
+    elif roll < 0.38:
+        situatie, age = "starter", random.randint(23, 30)
+        inkomen = round(random.uniform(1900, 3200), 2)
+        huis = round(random.uniform(450, 900), 2)
+        gender = random.choice(["vrouw", "man"])
+    elif roll < 0.58:
+        situatie, age = "koppel", random.randint(26, 38)
+        inkomen = round(random.uniform(3200, 5600), 2)
+        huis = round(random.uniform(800, 1400), 2)
+        gender = random.choice(["vrouw", "man"])
+    elif roll < 0.88:
+        situatie, age = "gezin", random.randint(32, 52)
+        inkomen = round(random.uniform(2800, 6200), 2)
+        huis = round(random.uniform(900, 1600), 2)
+        gender = "man" if random.random() < 0.55 else "vrouw"
+    else:
+        situatie, age = "pensioen", random.randint(66, 78)
+        inkomen = round(random.uniform(1400, 2800), 2)
+        huis = round(random.uniform(0, 700), 2)
+        gender = random.choice(["vrouw", "man"])
+
     first = random.choice(FIRST_F if gender == "vrouw" else FIRST_M)
     last = random.choice(LAST)
-    age = random.randint(18, 78)
+    saved = round(max(50, random.gauss(4000 if situatie != "student" else 800, 3500)), 2)
+    extra = [("studie", 15, 60)] if situatie == "student" else []
+    if situatie == "gezin":
+        extra.append(("kinderen", 70, 240))
+    events = []
+    if random.random() < 0.22:
+        events.append((kid, random_day(2026, random.randint(1, 9)).isoformat(), "verrassing_uitgave", round(-random.uniform(200, 900), 2), "Onverwachte factuur."))
+    if random.random() < 0.12:
+        events.append((kid, random_day(2026, random.randint(1, 9)).isoformat(), "nieuwe_job", round(random.uniform(150, 500), 2), "Inkomenswijziging door nieuwe job."))
+    return {
+        "klant": (kid, first, last, age, situatie, inkomen, saved, random.choice(CITIES), "nl", None, None),
+        "doelen": pick_goals(kid, situatie, catalog, saved),
+        "transacties": make_transactions(kid, inkomen, huis, extra),
+        "events": events,
+    }
 
-    if age < 23:
-        employment = random.choice(["student", "deeltijds loontrekkende"])
-        occupation = "student-jobber" if employment == "student" else random.choice(
-            ["verkoper", "kok", "chauffeur"]
+
+def init_db(path: Path) -> sqlite3.Connection:
+    if path.exists():
+        path.unlink()
+    conn = sqlite3.connect(path)
+    conn.executescript((DATA_DIR / "schema.sql").read_text(encoding="utf-8"))
+    return conn
+
+
+def insert_bundle(conn: sqlite3.Connection, bundle: dict) -> None:
+    conn.execute(
+        "INSERT INTO klant VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        bundle["klant"],
+    )
+    if bundle.get("partner"):
+        conn.execute(
+            "INSERT INTO klant VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            bundle["partner"],
         )
-        marital = random.choice(["alleenstaand", "samenwonend"])
-        children = 0
-        housing = random.choice(["huurder", "inwonend bij ouders"])
-        income = round(random.uniform(500, 1600), 2)
-    elif age >= 66:
-        employment = "pensioen"
-        occupation = "pensioen"
-        marital = random.choice(["gehuwd", "weduwe/weduwnaar", "alleenstaand", "gescheiden"])
-        children = random.randint(0, 3)
-        housing = random.choice(["eigenaar zonder hypotheek", "eigenaar zonder hypotheek", "huurder"])
-        income = round(random.uniform(1400, 3200), 2)
-    else:
-        employment = random.choices(
-            ["voltijds loontrekkende", "deeltijds loontrekkende", "zelfstandige", "ambtenaar", "werkzoekend"],
-            weights=[50, 15, 15, 12, 8],
-        )[0]
-        occupation = random.choice([o for o in OCCUPATIONS if o not in ("student-jobber", "pensioen")])
-        marital = random.choice(["alleenstaand", "samenwonend", "gehuwd", "gescheiden"])
-        children = 0 if marital == "alleenstaand" and random.random() < 0.75 else random.randint(0, 3)
-        if age < 28:
-            housing = random.choice(["huurder", "huurder", "inwonend bij ouders", "eigenaar met hypotheek"])
-        else:
-            housing = random.choice(
-                ["eigenaar met hypotheek", "eigenaar met hypotheek", "eigenaar zonder hypotheek", "huurder"]
-            )
-        if employment == "werkzoekend":
-            income = round(random.uniform(1100, 1800), 2)
-        else:
-            income = round(random.uniform(1800, 7200), 2)
+    conn.executemany(
+        "INSERT INTO doel (klant_id, type, bedrag, deadline, gespaard, status) VALUES (?,?,?,?,?,?)",
+        bundle["doelen"],
+    )
+    conn.executemany(
+        "INSERT INTO transactie (klant_id, datum, bedrag, categorie) VALUES (?,?,?,?)",
+        bundle["transacties"],
+    )
+    if bundle.get("events"):
+        conn.executemany(
+            "INSERT INTO plan_event (klant_id, datum, type, bedrag, toelichting) VALUES (?,?,?,?,?)",
+            bundle["events"],
+        )
 
-    current_balance = round(random.uniform(250, 18000), 2)
-    savings_balance = round(random.uniform(0, 85000), 2)
-    investments = round(max(0, random.gauss(12000, 25000)), 2)
-    if age < 25:
-        investments = round(random.uniform(0, 2500), 2)
-    pension = round(random.uniform(0, 45000), 2) if age >= 25 else 0.0
-    real_estate = 0.0
-    mortgage = 0.0
-    if housing.startswith("eigenaar"):
-        real_estate = round(random.uniform(180000, 620000), 2)
-        if "met hypotheek" in housing:
-            mortgage = round(real_estate * random.uniform(0.15, 0.75), 2)
-    consumer_loan = 0.0
-    if employment != "pensioen" and random.random() < 0.22:
-        consumer_loan = round(random.uniform(800, 18000), 2)
 
-    insurances = {
-        "woning": housing.startswith("eigenaar") or random.random() < 0.35,
-        "auto": random.random() < 0.62,
-        "leven": random.random() < 0.4 or mortgage > 0,
-        "hospitalisatie": random.random() < 0.55,
-        "familiale": random.random() < 0.5,
-        "rechtsbijstand": random.random() < 0.22,
-    }
+def export_csv(conn: sqlite3.Connection, out: Path) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    for table in ("klant", "doel", "transactie", "plan_event"):
+        rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+        names = [d[0] for d in conn.execute(f"SELECT * FROM {table} LIMIT 0").description]
+        with (out / f"{table}.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(names)
+            w.writerows(rows)
 
-    liquid = round(current_balance + savings_balance, 2)
-    invested = round(investments + pension, 2)
-    assets = round(liquid + invested + real_estate, 2)
-    liabilities = round(mortgage + consumer_loan, 2)
-    net_worth = round(assets - liabilities, 2)
 
-    if housing == "huurder" and 25 <= age <= 40 and random.random() < 0.4:
-        life_event, intent = "woning kopen", "woningfinanciering"
-    elif age >= 58 and age < 67:
-        life_event, intent = "pensioen binnen 24 maanden", "pensioenplanning"
-    elif children > 0 and age < 45 and random.random() < 0.25:
-        life_event, intent = "studie kind start", "kinderen beschermen"
-    elif employment == "zelfstandige" and random.random() < 0.3:
-        life_event, intent = "start als zelfstandige", "verzekering herzien"
-    else:
-        life_event = random.choice(["geen", "geen", "nieuwe job", "auto vervangen", "verhuis gepland"])
-        intent = random.choice(INTENTS)
-
-    products = []
-    products.append("zichtrekening")
-    if savings_balance > 50:
-        products.append("spaarrekening")
-    if investments > 500:
-        products.append("beleggingen")
-    if pension > 0:
-        products.append("pensioensparen")
-    if mortgage > 0:
-        products.append("woonlening")
-    if consumer_loan > 0:
-        products.append("lening op afbetaling")
-    for k, v in insurances.items():
-        if v:
-            products.append(f"verzekering_{k}")
-
-    last_login = date(2026, 9, 30) - timedelta(days=random.randint(0, 90))
-    last_advice = date(2026, 9, 30) - timedelta(days=random.randint(10, 720))
-
-    risk = random.choice(RISK)
-    if age >= 65:
-        risk = random.choice(["defensief", "neutraal"])
-
-    return {
-        "customer_id": f"KBC-{n:04d}",
-        "profile": {
-            "first_name": first,
-            "last_name": last,
-            "full_name": f"{first} {last}",
-            "gender": gender,
-            "birth_date": birth_date(age),
-            "age": age,
-            "nationality": "BE",
-            "language": lang,
-            "email": f"{first.lower()}.{last.lower().replace(' ', '')}{n}@example.be",
-            "phone": f"+32 4{random.randint(70, 99)} {random.randint(10, 99)} {random.randint(10, 99)} {random.randint(10, 99)}",
-            "address": {
-                "street": f"{random.choice(STREETS)} {random.randint(1, 180)}",
-                "postal_code": postal,
-                "city": city,
-                "province": province,
-                "country": "Belgie",
+def export_personas(lisa, koppel, gezin, out: Path) -> None:
+    folder = out / "personas"
+    folder.mkdir(parents=True, exist_ok=True)
+    for name, bundle in (("lisa", lisa), ("koppel", koppel), ("gezinsvader", gezin)):
+        payload = {
+            "klant": {
+                "id": bundle["klant"][0],
+                "voornaam": bundle["klant"][1],
+                "achternaam": bundle["klant"][2],
+                "leeftijd": bundle["klant"][3],
+                "situatie": bundle["klant"][4],
+                "inkomen": bundle["klant"][5],
+                "gespaard": bundle["klant"][6],
+                "stad": bundle["klant"][7],
             },
-        },
-        "household": {
-            "marital_status": marital,
-            "children_count": children,
-            "employment_status": employment,
-            "occupation": occupation,
-            "net_monthly_income_eur": income,
-            "housing_status": housing,
-        },
-        "compass": {
-            "branch": random.choice(BRANCHES),
-            "relationship_manager": random.choice(
-                ["Anke Vermeulen", "Tom Janssens", "Sofie Maes", "Pieter Claes", "Elise Dupont"]
-            ),
-            "kbc_mobile_active": random.random() < 0.82,
-            "preferred_channel": random.choice(CHANNELS),
-            "risk_profile": risk,
-            "sustainability_preference": random.choice(["geen voorkeur", "duurzaam", "sterk duurzaam"]),
-            "last_mobile_login": last_login.isoformat(),
-            "last_advice_contact": last_advice.isoformat(),
-            "engagement_score": random.randint(12, 98),
-            "iban_main": iban(n),
-            "products": products,
-            "assets_eur": {
-                "current_account": current_balance,
-                "savings": savings_balance,
-                "liquid_assets": liquid,
-                "investments": investments,
-                "tax_advantaged_pension": pension,
-                "real_estate_estimated": real_estate,
-                "total_assets": assets,
-            },
-            "liabilities_eur": {
-                "mortgage_outstanding": mortgage,
-                "consumer_loan_outstanding": consumer_loan,
-                "total_liabilities": liabilities,
-            },
-            "net_worth_eur": net_worth,
-            "insurances": insurances,
-        },
-        "signals": {
-            "life_event": life_event,
-            "detected_intent": intent,
-            "next_best_action": random.choice(NBA),
-            "churn_risk": random.choice(["laag", "laag", "laag", "medium", "hoog"]),
-            "credit_need_signal": mortgage == 0 and housing in ("huurder", "inwonend bij ouders") and 26 <= age <= 42,
-        },
-    }
-
-
-def flatten(c: dict) -> dict:
-    p, h, k, s = c["profile"], c["household"], c["compass"], c["signals"]
-    a = p["address"]
-    return {
-        "customer_id": c["customer_id"],
-        "first_name": p["first_name"],
-        "last_name": p["last_name"],
-        "gender": p["gender"],
-        "birth_date": p["birth_date"],
-        "age": p["age"],
-        "language": p["language"],
-        "email": p["email"],
-        "phone": p["phone"],
-        "street": a["street"],
-        "postal_code": a["postal_code"],
-        "city": a["city"],
-        "province": a["province"],
-        "marital_status": h["marital_status"],
-        "children_count": h["children_count"],
-        "employment_status": h["employment_status"],
-        "occupation": h["occupation"],
-        "net_monthly_income_eur": h["net_monthly_income_eur"],
-        "housing_status": h["housing_status"],
-        "branch": k["branch"],
-        "relationship_manager": k["relationship_manager"],
-        "kbc_mobile_active": k["kbc_mobile_active"],
-        "preferred_channel": k["preferred_channel"],
-        "risk_profile": k["risk_profile"],
-        "sustainability_preference": k["sustainability_preference"],
-        "last_mobile_login": k["last_mobile_login"],
-        "last_advice_contact": k["last_advice_contact"],
-        "engagement_score": k["engagement_score"],
-        "iban_main": k["iban_main"],
-        "products": "|".join(k["products"]),
-        "current_account_eur": k["assets_eur"]["current_account"],
-        "savings_eur": k["assets_eur"]["savings"],
-        "investments_eur": k["assets_eur"]["investments"],
-        "pension_eur": k["assets_eur"]["tax_advantaged_pension"],
-        "real_estate_eur": k["assets_eur"]["real_estate_estimated"],
-        "total_assets_eur": k["assets_eur"]["total_assets"],
-        "mortgage_eur": k["liabilities_eur"]["mortgage_outstanding"],
-        "consumer_loan_eur": k["liabilities_eur"]["consumer_loan_outstanding"],
-        "net_worth_eur": k["net_worth_eur"],
-        "ins_woning": k["insurances"]["woning"],
-        "ins_auto": k["insurances"]["auto"],
-        "ins_leven": k["insurances"]["leven"],
-        "ins_hospitalisatie": k["insurances"]["hospitalisatie"],
-        "ins_familiale": k["insurances"]["familiale"],
-        "life_event": s["life_event"],
-        "detected_intent": s["detected_intent"],
-        "next_best_action": s["next_best_action"],
-        "churn_risk": s["churn_risk"],
-        "credit_need_signal": s["credit_need_signal"],
-    }
+            "doelen": [
+                {"type": d[1], "bedrag": d[2], "deadline": d[3], "gespaard": d[4]}
+                for d in bundle["doelen"]
+            ],
+            "simulate_events": bundle.get("simulate", []),
+            "transactie_count": len(bundle["transacties"]),
+        }
+        if bundle.get("partner"):
+            payload["partner"] = {
+                "id": bundle["partner"][0],
+                "voornaam": bundle["partner"][1],
+                "achternaam": bundle["partner"][2],
+                "leeftijd": bundle["partner"][3],
+                "inkomen": bundle["partner"][5],
+            }
+        (folder / f"{name}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def main() -> None:
+    catalog = catalog_by_type(load_catalog())
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    customers = [make_customer(i) for i in range(100)]
-    (OUT_DIR / "customers.json").write_text(
+
+    db_path = DATA_DIR / "kompas.db"
+    conn = init_db(db_path)
+
+    lisa = persona_lisa(catalog)
+    koppel = persona_koppel(catalog)
+    gezin = persona_gezin(catalog)
+    for bundle in (lisa, koppel, gezin):
+        insert_bundle(conn, bundle)
+
+    extras = 197
+    for i in range(1, extras + 1):
+        insert_bundle(conn, random_klant(i, catalog))
+
+    conn.commit()
+
+    counts = {
+        "klanten": conn.execute("SELECT COUNT(*) FROM klant").fetchone()[0],
+        "transacties": conn.execute("SELECT COUNT(*) FROM transactie").fetchone()[0],
+        "doelen": conn.execute("SELECT COUNT(*) FROM doel").fetchone()[0],
+        "events": conn.execute("SELECT COUNT(*) FROM plan_event").fetchone()[0],
+    }
+
+    export_csv(conn, OUT_DIR)
+    export_personas(lisa, koppel, gezin, OUT_DIR)
+    (OUT_DIR / "kompas.db").write_bytes(db_path.read_bytes())
+    (OUT_DIR / "meta.json").write_text(
         json.dumps(
             {
-                "generated_at": datetime(2026, 9, 30, 19, 55).isoformat(),
-                "count": 100,
-                "note": "Volledig synthetische testdata. Geen echte KBC-klanten. IBANs en e-mails zijn nep.",
-                "customers": customers,
+                "generated_at": datetime(2026, 9, 30, 20, 10).isoformat(),
+                "today": TODAY.isoformat(),
+                "transaction_window": [TX_START.isoformat(), TODAY.isoformat()],
+                "counts": counts,
+                "personas": ["lisa", "koppel", "gezinsvader"],
+                "note": "Synthetische testdata voor KBC Kompas. Geen echte klanten.",
             },
             indent=2,
             ensure_ascii=False,
@@ -392,12 +371,10 @@ def main() -> None:
         + "\n",
         encoding="utf-8",
     )
-    rows = [flatten(c) for c in customers]
-    with (OUT_DIR / "customers.csv").open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"Wrote {len(customers)} customers to {OUT_DIR}")
+    conn.close()
+    print(json.dumps(counts, indent=2))
+    print(f"DB: {db_path}")
+    print(f"Export: {OUT_DIR}")
 
 
 if __name__ == "__main__":

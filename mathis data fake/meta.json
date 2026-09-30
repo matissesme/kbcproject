@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-09-30T20:10:00",
+  "today": "2026-09-30",
+  "transaction_window": [
+    "2025-10-01",
+    "2026-09-30"
+  ],
+  "counts": {
+    "klanten": 201,
+    "transacties": 25604,
+    "doelen": 284,
+    "events": 71
+  },
+  "personas": [
+    "lisa",
+    "koppel",
+    "gezinsvader"
+  ],
+  "note": "Synthetische testdata voor KBC Kompas. Geen echte klanten."
+}

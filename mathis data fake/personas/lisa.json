@@ -1,0 +1,43 @@
+{
+  "klant": {
+    "id": "lisa",
+    "voornaam": "Lisa",
+    "achternaam": "Vandenberghe",
+    "leeftijd": 21,
+    "situatie": "student",
+    "inkomen": 1180.0,
+    "gespaard": 2100.0,
+    "stad": "Leuven"
+  },
+  "doelen": [
+    {
+      "type": "kot",
+      "bedrag": 4500.0,
+      "deadline": "2027-08-15",
+      "gespaard": 1400.0
+    },
+    {
+      "type": "reis",
+      "bedrag": 1800.0,
+      "deadline": "2027-07-01",
+      "gespaard": 700.0
+    }
+  ],
+  "simulate_events": [
+    {
+      "type": "verrassing_uitgave",
+      "datum": "2026-09-30",
+      "bedrag": -620.0,
+      "categorie": "onverwachte_uitgave",
+      "toelichting": "Laptop kapot, herstelling 620 euro."
+    },
+    {
+      "type": "nieuwe_job",
+      "datum": "2026-09-30",
+      "bedrag": 450.0,
+      "categorie": "loon",
+      "toelichting": "Weekendjob erbij, +450 euro per maand."
+    }
+  ],
+  "transactie_count": 129
+}

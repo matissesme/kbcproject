@@ -1,0 +1,36 @@
+{
+  "klant": {
+    "id": "gezinsvader",
+    "voornaam": "Tom",
+    "achternaam": "Janssens",
+    "leeftijd": 41,
+    "situatie": "gezin",
+    "inkomen": 3900.0,
+    "gespaard": 9400.0,
+    "stad": "Gent"
+  },
+  "doelen": [
+    {
+      "type": "eerste_auto",
+      "bedrag": 12000.0,
+      "deadline": "2027-05-01",
+      "gespaard": 3800.0
+    },
+    {
+      "type": "pensioen",
+      "bedrag": 80000.0,
+      "deadline": "2045-09-01",
+      "gespaard": 4100.0
+    }
+  ],
+  "simulate_events": [
+    {
+      "type": "verrassing_uitgave",
+      "datum": "2026-09-30",
+      "bedrag": -1800.0,
+      "categorie": "onverwachte_uitgave",
+      "toelichting": "Wasbak en leidingen, 1800 euro."
+    }
+  ],
+  "transactie_count": 134
+}
