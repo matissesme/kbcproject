@@ -1,24 +1,36 @@
 /**
  * KBC KOMPAS & KBC MOBILE APP CLONE - HOOFD APPLICATIE (frontend/kbc-kompas-app.js)
- * Bevat:
- * 1. Volledig Gekloonde KBC Mobile App met 5 Tabs:
- *    - Tab 1: Start (KBC Home + Kompas Koers Widget + Rekeningen + Acties + Transacties)
- *    - Tab 2: Kompas (Levensplan + Route-analyse + 3-Vragen Onboarding + Bijsturen-Popup)
- *    - Tab 3: Producten (Bankieren, Verzekeren & Beleggen gekoppeld aan je doel)
- *    - Tab 4: Kate (Persoonlijke AI-Coach & Uitleg)
- *    - Tab 5: Instellingen (Mijn Digitaal Profiel aanpassen, "Waarom zie ik dit?", Privacy)
- * 2. KBC Adviseursscherm (GET /adviseur/{klant})
- * 3. 200-Klanten Macro Dashboard (GET /dashboard)
- * 4. Live Event Simulator (Verrassings-uitgave, Nieuwe job, etc.)
+ * 
+ * Bevat 2 gescheiden werelden:
+ * 1. KLANTAPP (KBC Mobile interface):
+ *    - Telefoonframe met KBC-kleuren & Dynamic Island
+ *    - Tab 1: Start (Rekeningen, Kompas Koers Widget, Snelle Acties, Transacties)
+ *    - Tab 2: Kompas (Halve cirkelmeter met naald, route, deadline, "Waarom zie ik dit?", Bijsturen modal)
+ *    - Tab 3: Producten (Gekoppeld aan het doel: wat je hebt vs. wat nog ontbreekt)
+ *    - Tab 4: Kate AI-Coach
+ *    - Tab 5: Mijn Profiel & Instellingen (Doel wijzigen, budget aanpassen)
+ * 
+ * 2. KBC-MEDEWERKER INTERFACE ("KBC Pro / Portefeuille Kompas"):
+ *    - Professioneel portaal voor adviseurs en kantoormedewerkers
+ *    - Macro KPI-balk over de 200 klanten
+ *    - Geavanceerde zoekbalk & filters (Status, Doel, Stad)
+ *    - Interactieve 200-klanten portefeuillelijst
+ *    - Klikken op ELKE persoon opent een diepgaand KLANTDOSSIER:
+ *      * Tab Overzicht & Kompas (ratio, nodige inleg, kantoor, IBAN's)
+ *      * Tab 12-Maanden Cashflow (grafiek met inkomsten, uitgaven en maandelijkse netto-opbouw)
+ *      * Tab Transactiehistorie (volledig overzicht van reële transacties per categorie)
+ *      * Tab Contacthistorie & Gespreksnota's (adviesgesprekken, videocalls, Kate-vragen)
+ *      * Tab Producten & Dekkingsgaten (zichtrekening, woonkrediet, brandpolis, beleggingen)
+ *      * Direct doorklikken: "Bekijk als klant in KBC Mobile"
  */
 window.KBCAura = window.KBCAura || {};
 
 (function () {
   var esc = window.KBCAura.escapeHtml;
 
-  // Applicatie Status
+  // Centrale State
   var state = {
-    currentTopView: "split", // "split", "phone_only" = klantapp; "medewerker" = interne portefeuille
+    currentTopView: "split", // "split" = Klant + Simulator, "phone_only" = Alleen Klant Mobile, "medewerker" = KBC Medewerker Portefeuille
     activeCustomerIndex: 0,
     customers: JSON.parse(JSON.stringify(window.KBCAura.PersonasDatabase || [])),
     activeAppTab: "start",
@@ -30,25 +42,26 @@ window.KBCAura = window.KBCAura || {};
       targetAmount: 45000,
       months: 36
     },
+    // Filters & paginering voor Medewerker Portaal
     staffSearch: "",
     staffStatus: "ALL",
     staffGoal: "ALL",
     staffCity: "ALL",
     staffPage: 1,
-    staffPageSize: 15,
+    staffPageSize: 12,
     selectedStaffCustomerId: null,
-    staffDossierTab: "overzicht"
+    staffDossierTab: "overzicht" // "overzicht", "historie", "transacties", "contact", "producten"
   };
 
   function euro(n) {
     var v = Math.round(Number(n) || 0);
-    return "€" + v.toLocaleString("nl-BE");
+    return "€ " + v.toLocaleString("nl-BE");
   }
 
   function statusMeta(code) {
-    if (code === "OP_KOERS") return { label: "Op koers", color: "#10b981", bg: "#ecfdf5", cls: "ok" };
-    if (code === "BIJSTUREN") return { label: "Bijsturen", color: "#d97706", bg: "#fffbeb", cls: "warn" };
-    return { label: "Aanpassen", color: "#dc2626", bg: "#fef2f2", cls: "risk" };
+    if (code === "OP_KOERS") return { label: "Op koers", color: "#10b981", bg: "#ecfdf5", border: "#a7f3d0", cls: "ok", dot: "🟢" };
+    if (code === "BIJSTUREN") return { label: "Bijsturen", color: "#d97706", bg: "#fffbeb", border: "#fde68a", cls: "warn", dot: "🟠" };
+    return { label: "Aanpassen", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", cls: "risk", dot: "🔴" };
   }
 
   function getActiveCustomer() {
@@ -68,27 +81,29 @@ window.KBCAura = window.KBCAura || {};
     var cust = getActiveCustomer();
     var kompas = getKompasEvaluation();
 
-    var isStaff = state.currentTopView === "medewerker" || state.currentTopView === "adviseur" || state.currentTopView === "dashboard";
-    if (state.currentTopView === "adviseur" || state.currentTopView === "dashboard") {
-      state.currentTopView = "medewerker";
-      isStaff = true;
-    }
+    var isStaff = state.currentTopView === "medewerker";
 
     var topNavHtml =
       '<header class="top-navbar">' +
         '<div class="brand-wrap">' +
           '<span class="kbc-logo-badge">KBC</span>' +
           '<div class="brand-text">' +
-            '<h1>' + (isStaff ? "Kompas — Medewerker" : "Kompas — Klantapp") + '</h1>' +
+            '<h1>' + (isStaff ? 'KBC Pro — Adviseursportaal Portefeuille' : 'KBC Kompas — Mobile App') + '</h1>' +
             '<small>' + (isStaff
-              ? "Interne portefeuille · 200 klantdossiers · niet zichtbaar voor de klant"
-              : "Wat de klant ziet in Mobile · demo-persona's") + '</small>' +
+              ? 'Interne KBC-omgeving • 200 actieve klantdossiers • Niet zichtbaar voor klant'
+              : 'Klantinterface • KBC Mobile • Live Kompas & Stuurmechanisme') + '</small>' +
           '</div>' +
         '</div>' +
-        '<div class="role-switch">' +
-          '<button class="view-tab-btn ' + (!isStaff && state.currentTopView === "split" ? "active" : "") + '" data-view="split">📱 Klantapp (demo)</button>' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "phone_only" ? "active" : "") + '" data-view="phone_only">Alleen telefoon</button>' +
-          '<button class="view-tab-btn ' + (isStaff ? "active" : "") + '" data-view="medewerker">👔 KBC-medewerker</button>' +
+        '<div class="top-view-tabs">' +
+          '<button class="view-tab-btn ' + (state.currentTopView === "split" ? "active" : "") + '" data-view="split">' +
+            '📱 Klantapp &amp; Simulator' +
+          '</button>' +
+          '<button class="view-tab-btn ' + (state.currentTopView === "phone_only" ? "active" : "") + '" data-view="phone_only">' +
+            '📲 Alleen Klant Mobile' +
+          '</button>' +
+          '<button class="view-tab-btn ' + (state.currentTopView === "medewerker" ? "active" : "") + '" data-view="medewerker">' +
+            '👔 KBC Medewerker Portaal (200 klanten)' +
+          '</button>' +
         '</div>' +
       '</header>';
 
@@ -96,7 +111,7 @@ window.KBCAura = window.KBCAura || {};
 
     if (isStaff) {
       bodyHtml += renderStaffWorkspace();
-    } else if (state.currentTopView === "split" || state.currentTopView === "phone_only") {
+    } else {
       if (state.currentTopView === "split") {
         bodyHtml += '<div class="control-sidebar">' + renderSidebar(cust, kompas) + '</div>';
       }
@@ -117,17 +132,17 @@ window.KBCAura = window.KBCAura || {};
     bindEvents(appRoot);
   }
 
-  // --- Linker Sidebar: Persona's + Events Simulator ---
+  // --- Linker Sidebar: Persona's + Events Simulator (Voor Klantapp Demo) ---
   function renderSidebar(cust, kompas) {
     var personasHtml = state.customers.map(function (c, idx) {
       var isActive = idx === state.activeCustomerIndex;
       return (
         '<button class="persona-btn ' + (isActive ? "active" : "") + '" data-persona-idx="' + idx + '">' +
           '<span class="persona-avatar">' + esc(c.avatar) + '</span>' +
-          '<div class="persona-info">' +
+          '<span class="persona-info">' +
             '<strong>' + esc(c.name) + ' (' + c.age + 'j)</strong>' +
             '<small>' + esc(c.situation) + ' • ' + esc(c.city) + '</small>' +
-          '</div>' +
+          '</span>' +
         '</button>'
       );
     }).join("");
@@ -136,10 +151,10 @@ window.KBCAura = window.KBCAura || {};
     var eventsHtml = events.map(function (evt) {
       return (
         '<button class="event-btn" data-event-id="' + esc(evt.id) + '" style="border-left-color:' + esc(evt.badgeColor) + '">' +
-          '<div>' +
+          '<span>' +
             '<strong>' + esc(evt.title) + '</strong>' +
             '<small>' + esc(evt.description) + '</small>' +
-          '</div>' +
+          '</span>' +
           '<span class="event-trigger-tag" style="background:' + esc(evt.badgeColor) + '">Simuleer &rarr;</span>' +
         '</button>'
       );
@@ -148,19 +163,19 @@ window.KBCAura = window.KBCAura || {};
     return (
       '<div class="card-control">' +
         '<div class="card-control-header">' +
-          '<h2>👤 1. Kies een Demo-Persona</h2>' +
-          '<span class="pill-badge">Jasper Spec</span>' +
+          '<h2>👤 1. Kies een Demo-Persona (Klant)</h2>' +
+          '<span class="pill-badge">Klantapp demo</span>' +
         '</div>' +
         '<div class="personas-grid">' + personasHtml + '</div>' +
       '</div>' +
 
       '<div class="card-control">' +
         '<div class="card-control-header">' +
-          '<h2>⚡ 2. Simuleer een Live Event</h2>' +
-          '<span class="pill-badge">POST /event</span>' +
+          '<h2>⚡ 2. Simuleer een Live Event (POST /event)</h2>' +
+          '<span class="pill-badge">Real-time</span>' +
         '</div>' +
         '<p style="font-size:12px;color:#64748b;margin-bottom:12px;">' +
-          'Klik op een gebeurtenis. De Kompas-engine herrekent direct de spaarcapaciteit en ratio, en de KBC-app rechts springt live naar een nieuwe koers!' +
+          'Klik op een gebeurtenis. De Kompas-engine herrekent direct de spaarcapaciteit en ratio, en de smartphone rechts slaat live om naar de nieuwe status!' +
         '</p>' +
         '<div class="events-list">' + eventsHtml + '</div>' +
       '</div>' +
@@ -171,11 +186,11 @@ window.KBCAura = window.KBCAura || {};
           '<span class="pill-badge">' + esc(kompas.status.code) + '</span>' +
         '</div>' +
         '<div style="font-size:12px;line-height:1.6;color:#334155;">' +
-          '<div>• <strong>Gem. Inkomen (3 mnd):</strong> €' + kompas.metrics.avgIncome3m + '</div>' +
-          '<div>• <strong>Gem. Uitgaven (3 mnd):</strong> €' + kompas.metrics.avgExpenses3m + '</div>' +
-          '<div style="color:var(--kbc-blue);font-weight:700;">• Spaarcapaciteit: €' + kompas.metrics.savingsCapacity + ' / mnd</div>' +
-          '<div style="margin-top:6px;">• <strong>Resterend doel:</strong> €' + kompas.metrics.remainingAmount.toLocaleString("nl-BE") + ' over ' + kompas.metrics.monthsToDeadline + ' mnd</div>' +
-          '<div style="color:#d97706;font-weight:700;">• Nodig per maand: €' + kompas.metrics.neededPerMonth + ' / mnd</div>' +
+          '<div>• <strong>Gem. Inkomen (3 mnd):</strong> ' + euro(kompas.metrics.avgIncome3m) + '</div>' +
+          '<div>• <strong>Gem. Uitgaven (3 mnd):</strong> ' + euro(kompas.metrics.avgExpenses3m) + '</div>' +
+          '<div style="color:var(--kbc-blue);font-weight:700;">• Spaarcapaciteit: ' + euro(kompas.metrics.savingsCapacity) + ' / mnd</div>' +
+          '<div style="margin-top:6px;">• <strong>Resterend doel:</strong> ' + euro(kompas.metrics.remainingAmount) + ' over ' + kompas.metrics.monthsToDeadline + ' mnd</div>' +
+          '<div style="color:#d97706;font-weight:700;">• Nodig per maand: ' + euro(kompas.metrics.neededPerMonth) + ' / mnd</div>' +
           '<div style="margin-top:6px;font-size:13px;font-weight:800;color:' + esc(kompas.status.color) + ';">' +
             '• Ratio = ' + kompas.metrics.ratio.toFixed(2).replace(".", ",") + ' &rarr; ' + esc(kompas.status.label) +
           '</div>' +
@@ -184,7 +199,7 @@ window.KBCAura = window.KBCAura || {};
     );
   }
 
-  // --- Rechter Smartphone: KBC Mobile App Clone ---
+  // --- Rechter Smartphone: KBC Mobile App Clone (Klant) ---
   function renderPhone(cust, kompas) {
     var screenContentHtml = "";
     if (state.activeAppTab === "start") {
@@ -237,339 +252,314 @@ window.KBCAura = window.KBCAura || {};
     );
   }
 
-  // --- Tab 1: Start (KBC Home) ---
+  // --- Klant Tab 1: Start (KBC Mobile Home) ---
   function renderAppStartTab(cust, kompas) {
-    var txHtml = (cust.transactions || []).slice(0, 5).map(function (tx) {
+    var accts = cust.accounts || {};
+    var txList = (cust.transactions || []).slice(0, 5).map(function (tx) {
       var isNeg = tx.amount < 0;
-      var amtStr = (isNeg ? "" : "+") + tx.amount.toFixed(2).replace(".", ",") + " €";
+      var amtStr = (isNeg ? "-€ " : "+€ ") + Math.abs(tx.amount).toFixed(2).replace(".", ",");
       return (
-        '<div class="app-tx-item">' +
-          '<div class="app-tx-item-left">' +
+        '<div class="tx-item">' +
+          '<div class="tx-desc">' +
             '<strong>' + esc(tx.merchant) + '</strong>' +
             '<small>' + esc(tx.date) + ' • ' + esc(tx.category) + '</small>' +
           '</div>' +
-          '<span class="app-tx-item-right ' + (isNeg ? "neg" : "pos") + '">' + amtStr + '</span>' +
+          '<span class="tx-amount ' + (isNeg ? 'neg' : 'pos') + '">' + amtStr + '</span>' +
         '</div>'
       );
     }).join("");
 
     return (
-      // Kompas Widget bovenaan het startscherm
-      '<div class="kompas-hero-card" style="border-top: 4px solid ' + esc(kompas.status.color) + '">' +
-        '<div class="kompas-card-top">' +
-          '<span class="kompas-tag">🧭 KBC KOMPAS • JE KOERS</span>' +
-          '<span class="status-pill status-' + esc(kompas.status.code.toLowerCase().replace(/_/g, "-")) + '">' +
-            esc(kompas.status.badgeText) +
+      '<!-- Kompas Widget op het Startscherm -->' +
+      '<div class="app-card kompas-hero-card" style="border-left: 5px solid ' + esc(kompas.status.color) + ';">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<span style="font-size:12px;font-weight:800;color:var(--kbc-blue);display:flex;align-items:center;gap:4px;">🧭 KBC KOMPAS</span>' +
+          '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:' + esc(kompas.status.bgLight) + ';color:' + esc(kompas.status.color) + ';">' +
+            esc(kompas.status.label) +
           '</span>' +
         '</div>' +
-
-        '<div class="kompas-visual-gauge">' +
-          '<div class="kompas-needle-wrap" style="transform: rotate(' + kompas.status.compassAngle + 'deg);">' +
-            '🧭' +
-          '</div>' +
-          '<div class="kompas-headline-text">' +
-            '<h4>' + esc(kompas.activeGoal.title) + '</h4>' +
-            '<p>' + esc(kompas.status.headline) + '</p>' +
-          '</div>' +
+        '<h4 style="font-size:14px;color:var(--kbc-text-dark);margin-bottom:4px;">' + esc(kompas.activeGoal.title) + '</h4>' +
+        '<p style="font-size:12px;color:#64748b;line-height:1.4;margin-bottom:12px;">' + esc(kompas.status.adviceText) + '</p>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="btn-card-action tab-nav-item" data-tab="kompas" style="flex:1;background:var(--kbc-blue);color:#fff;border:none;padding:8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">' +
+            'Bekijk Route &rarr;' +
+          '</button>' +
+          (kompas.status.code !== "OP_KOERS"
+            ? '<button class="btn-open-steering" style="flex:1;background:' + esc(kompas.status.color) + ';color:#fff;border:none;padding:8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">' +
+                '⚡ Nu Bijsturen' +
+              '</button>'
+            : '') +
         '</div>' +
-
-        '<div class="progress-bar-wrap">' +
-          '<div class="progress-labels">' +
-            '<span>Voortgang: €' + kompas.metrics.savedAmount.toLocaleString("nl-BE") + '</span>' +
-            '<span>Doel: €' + kompas.metrics.targetAmount.toLocaleString("nl-BE") + ' (' + kompas.metrics.progressPct + '%)</span>' +
-          '</div>' +
-          '<div class="progress-track">' +
-            '<div class="progress-fill" style="width:' + kompas.metrics.progressPct + '%;background:' + esc(kompas.status.color) + '"></div>' +
-          '</div>' +
-        '</div>' +
-
-        '<div class="kompas-metric-ticker">' +
-          '<div class="ticker-item"><small>Spaarruimte</small><strong>€' + kompas.metrics.savingsCapacity + '/mnd</strong></div>' +
-          '<div class="ticker-item"><small>Nodig</small><strong>€' + kompas.metrics.neededPerMonth + '/mnd</strong></div>' +
-          '<div class="ticker-item"><small>Resterend</small><strong>' + kompas.metrics.monthsToDeadline + ' mnd</strong></div>' +
-        '</div>' +
-
-        '<button class="btn-bijsturen-action btn-open-steering">' +
-          (kompas.status.code === "OP_KOERS" ? "✓ Bekijk Jouw Route &amp; Producten" : "⚡ Nu Bijsturen (3 Opties)") +
-        '</button>' +
       '</div>' +
 
-      // Rekeningen
-      '<div class="kbc-account-card">' +
-        '<div class="account-info">' +
-          '<small>' + esc(cust.accounts.checkingIban) + '</small>' +
-          '<strong>' + esc(cust.accounts.checkingName) + '</strong>' +
+      '<!-- Rekeningen Overzicht -->' +
+      '<div class="app-card">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+          '<strong style="font-size:13px;color:var(--kbc-blue);">Mijn Rekeningen</strong>' +
+          '<span style="font-size:11px;color:var(--kbc-cyan);font-weight:700;cursor:pointer;">Details</span>' +
         '</div>' +
-        '<span class="account-balance">€ ' + cust.accounts.checkingBalance.toFixed(2).replace(".", ",") + '</span>' +
+        '<div class="account-row">' +
+          '<div>' +
+            '<strong>' + esc(accts.checkingName || "Zichtrekening") + '</strong>' +
+            '<small>' + esc(accts.checkingIban || "BE68 7340 0000 0000") + '</small>' +
+          '</div>' +
+          '<span class="acc-balance">' + euro(accts.checkingBalance) + '</span>' +
+        '</div>' +
+        '<div class="account-row">' +
+          '<div>' +
+            '<strong>' + esc(accts.savingsName || "Spaarrekening") + '</strong>' +
+            '<small>' + esc(accts.savingsIban || "BE91 7340 0000 0000") + '</small>' +
+          '</div>' +
+          '<span class="acc-balance" style="color:var(--kbc-cyan);">' + euro(accts.savingsBalance) + '</span>' +
+        '</div>' +
       '</div>' +
 
-      '<div class="kbc-account-card">' +
-        '<div class="account-info">' +
-          '<small>' + esc(cust.accounts.savingsIban) + '</small>' +
-          '<strong>' + esc(cust.accounts.savingsName) + '</strong>' +
-        '</div>' +
-        '<span class="account-balance" style="color:var(--kbc-blue);">€ ' + cust.accounts.savingsBalance.toFixed(2).replace(".", ",") + '</span>' +
+      '<!-- Snelle Acties -->' +
+      '<div class="quick-actions-bar">' +
+        '<button class="quick-action-btn btn-sim-transfer"><span>💸</span>Overschrijven</button>' +
+        '<button class="quick-action-btn tab-nav-item" data-tab="kompas"><span>🎯</span>Mijn Doelen</button>' +
+        '<button class="quick-action-btn tab-nav-item" data-tab="kate"><span>💬</span>Vraag Kate</button>' +
       '</div>' +
 
-      (cust.accounts.jointIban
-        ? '<div class="kbc-account-card" style="border-left: 3px solid #ec4899;">' +
-            '<div class="account-info">' +
-              '<small>' + esc(cust.accounts.jointIban) + ' • Samen met ' + esc(cust.partnerName) + '</small>' +
-              '<strong>Gezamenlijke KBC-Rekening</strong>' +
-            '</div>' +
-            '<span class="account-balance">€ ' + cust.accounts.jointBalance.toFixed(2).replace(".", ",") + '</span>' +
-          '</div>'
-        : '') +
-
-      // Snelle KBC Acties
-      '<div class="kbc-quick-actions">' +
-        '<button class="quick-action-btn btn-sim-transfer"><span>💶</span><small>Overschrijven</small></button>' +
-        '<button class="quick-action-btn btn-sim-payconiq"><span>📱</span><small>Payconiq / QR</small></button>' +
-        '<button class="quick-action-btn btn-open-onboarding"><span>🎯</span><small>Nieuw Doel</small></button>' +
-        '<button class="quick-action-btn btn-sim-nmbs"><span>🚆</span><small>NMBS / 4411</small></button>' +
-      '</div>' +
-
-      // Recente Transacties
-      '<div class="app-tx-card">' +
-        '<div class="app-tx-header">' +
-          '<h4>Recente verrichtingen</h4>' +
-          '<small style="color:var(--kbc-cyan);font-weight:700;cursor:pointer;">Alles &gt;</small>' +
+      '<!-- Recente Transacties -->' +
+      '<div class="app-card">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<strong style="font-size:13px;color:var(--kbc-blue);">Laatste Betalingen</strong>' +
+          '<small style="font-size:11px;color:#94a3b8;">Laatste 5</small>' +
         '</div>' +
-        txHtml +
+        '<div class="tx-list">' + txList + '</div>' +
       '</div>'
     );
   }
 
-  // --- Tab 2: Kompas (Levensplan & Route-analyse) ---
+  // --- Klant Tab 2: Kompas (Volledig Scherm met Naaldmeter) ---
   function renderAppKompasTab(cust, kompas) {
-    var routeHaveHtml = kompas.routeAnalysis.whatYouHave.map(function (item) {
+    var angle = kompas.status.compassAngle || 0;
+    var goals = cust.goals || [];
+    var goalsButtons = goals.map(function (g) {
+      var isAct = g.id === cust.activeGoalId;
       return (
-        '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">' +
-          '<span style="font-size:18px;">' + esc(item.icon) + '</span>' +
-          '<div style="flex:1;">' +
-            '<strong>' + esc(item.label) + '</strong>' +
-            '<small style="display:block;color:#64748b;">' + esc(item.detail) + '</small>' +
-          '</div>' +
-          '<span style="color:var(--status-green);font-weight:800;">✓ In orde</span>' +
-        '</div>'
-      );
-    }).join("");
-
-    var routeMissingHtml = kompas.routeAnalysis.whatIsMissing.map(function (item) {
-      return (
-        '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">' +
-          '<span style="font-size:18px;">' + esc(item.icon) + '</span>' +
-          '<div style="flex:1;">' +
-            '<strong>' + esc(item.label) + '</strong>' +
-            '<small style="display:block;color:#dc2626;">' + esc(item.detail) + '</small>' +
-          '</div>' +
-          '<button class="btn-activate-product" data-prod-id="' + esc(item.id) + '" style="background:var(--kbc-cyan);color:#fff;border:none;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;">' +
-            '+ Koppel' +
-          '</button>' +
-        '</div>'
-      );
-    }).join("");
-
-    var goalsListHtml = (cust.goals || []).map(function (g) {
-      var isCurrent = g.id === cust.activeGoalId;
-      return (
-        '<button class="btn-switch-goal" data-goal-id="' + esc(g.id) + '" style="padding:6px 12px;border-radius:16px;border:1px solid ' + (isCurrent ? 'var(--kbc-cyan)' : '#cbd5e1') + ';background:' + (isCurrent ? '#f0f9ff' : '#fff') + ';font-size:11px;font-weight:700;color:' + (isCurrent ? 'var(--kbc-blue)' : '#475569') + ';cursor:pointer;">' +
-          (isCurrent ? '● ' : '') + esc(g.title) +
+        '<button class="btn-switch-goal ' + (isAct ? 'active' : '') + '" data-goal-id="' + esc(g.id) + '">' +
+          esc(g.title) +
         '</button>'
       );
-    }).join(" ");
+    }).join("");
+
+    var missingHtml = (kompas.routeAnalysis.whatIsMissing || []).map(function (m) {
+      return (
+        '<div class="route-item missing">' +
+          '<span>⚠️</span>' +
+          '<div>' +
+            '<strong>' + esc(m.title) + '</strong>' +
+            '<small>' + esc(m.desc) + '</small>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("") || '<p style="font-size:11px;color:#10b981;">✓ Geen ontbrekende stappen of risico\'s gedetecteerd!</p>';
 
     return (
-      '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;">' +
-        goalsListHtml +
-        '<button class="btn-open-onboarding" style="padding:6px 10px;border-radius:16px;border:1px dashed var(--kbc-cyan);background:#fff;font-size:11px;font-weight:700;color:var(--kbc-cyan);cursor:pointer;">+ Nieuw Doel</button>' +
+      '<!-- Doelen Kiezer Header -->' +
+      '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;">' +
+        goalsButtons +
+        '<button class="btn-open-onboarding" style="padding:6px 12px;border:1px dashed var(--kbc-cyan);background:#fff;border-radius:20px;font-size:11px;color:var(--kbc-cyan);font-weight:700;white-space:nowrap;cursor:pointer;">+ Nieuw Doel</button>' +
       '</div>' +
 
-      '<div class="kompas-hero-card" style="border-top: 4px solid ' + esc(kompas.status.color) + '">' +
-        '<div class="kompas-card-top">' +
-          '<span class="kompas-tag">🧭 ' + esc(kompas.goalSpec.title) + '</span>' +
-          '<span class="status-pill status-' + esc(kompas.status.code.toLowerCase().replace(/_/g, "-")) + '">' +
-            esc(kompas.status.badgeText) +
-          '</span>' +
+      '<!-- Halve Cirkel Meter met Naald -->' +
+      '<div class="app-card compass-dial-card">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<h3 style="font-size:14px;color:var(--kbc-blue);">' + esc(kompas.activeGoal.title) + '</h3>' +
+          '<span style="font-size:11px;font-weight:800;color:' + esc(kompas.status.color) + ';">' + esc(kompas.status.label) + '</span>' +
         '</div>' +
-        '<p style="font-size:12px;color:#334155;line-height:1.45;margin-bottom:12px;">' +
-          esc(kompas.status.adviceText) +
-        '</p>' +
-        '<button class="btn-bijsturen-action btn-open-steering">⚡ Bekijk Bijstuur-Opties &amp; Simulatie</button>' +
+        '<p style="font-size:11px;color:#64748b;margin-bottom:10px;">' + esc(kompas.status.headline) + '</p>' +
+
+        '<!-- SVG Wijzer Kompas -->' +
+        '<div class="compass-svg-container">' +
+          '<svg viewBox="0 0 200 115" class="compass-gauge">' +
+            '<path d="M 20 100 A 80 80 0 0 1 65 35" fill="none" stroke="#ef4444" stroke-width="18" stroke-linecap="round"/>' +
+            '<path d="M 68 32 A 80 80 0 0 1 132 32" fill="none" stroke="#f59e0b" stroke-width="18"/>' +
+            '<path d="M 135 35 A 80 80 0 0 1 180 100" fill="none" stroke="#10b981" stroke-width="18" stroke-linecap="round"/>' +
+            '<g transform="translate(100, 100) rotate(' + angle + ')">' +
+              '<line x1="0" y1="0" x2="0" y2="-72" stroke="#003665" stroke-width="4" stroke-linecap="round"/>' +
+              '<circle cx="0" cy="0" r="7" fill="#003665"/>' +
+              '<circle cx="0" cy="-72" r="3" fill="#009DE0"/>' +
+            '</g>' +
+          '</svg>' +
+          '<div class="compass-legend">' +
+            '<span style="color:#ef4444;">Aanpassen (&lt;0,7)</span>' +
+            '<span style="color:#f59e0b;">Bijsturen</span>' +
+            '<span style="color:#10b981;">Op Koers (&ge;1,0)</span>' +
+          '</div>' +
+        '</div>' +
+
+        '<!-- Voortgangsbalk -->' +
+        '<div class="progress-bar-wrap" style="margin-top:14px;">' +
+          '<div class="progress-bar-fill" style="width:' + kompas.metrics.progressPct + '%;background:' + esc(kompas.status.color) + ';"></div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-top:4px;">' +
+          '<span>' + euro(kompas.metrics.savedAmount) + ' gespaard</span>' +
+          '<span>Doel: ' + euro(kompas.metrics.targetAmount) + ' (' + kompas.metrics.monthsToDeadline + ' mnd)</span>' +
+        '</div>' +
+
+        '<div style="margin-top:14px;display:flex;gap:8px;">' +
+          '<button class="btn-open-steering" style="flex:1;background:var(--kbc-blue);color:#fff;border:none;padding:10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">' +
+            '⚙️ Bekijk Bijstuur-Opties' +
+          '</button>' +
+        '</div>' +
       '</div>' +
 
-      // Route ernaartoe: Wat heb je al vs Wat ontbreekt nog
-      '<div class="card-control" style="padding:14px;">' +
-        '<h4 style="font-size:13px;color:var(--kbc-blue);margin-bottom:10px;">✅ Wat je al hebt voor dit doel</h4>' +
-        routeHaveHtml +
-      '</div>' +
-
-      '<div class="card-control" style="padding:14px;">' +
-        '<h4 style="font-size:13px;color:#dc2626;margin-bottom:10px;">⚠️ Wat nog ontbreekt op je route</h4>' +
-        (routeMissingHtml || '<p style="font-size:12px;color:var(--status-green);">Alles staat klaar op je route! 🎉</p>') +
+      '<!-- Route Analyse: Wat ontbreekt nog? -->' +
+      '<div class="app-card">' +
+        '<strong style="font-size:13px;color:var(--kbc-blue);display:block;margin-bottom:8px;">Wat heb je nodig voor deze bestemming?</strong>' +
+        missingHtml +
       '</div>'
     );
   }
 
-  // --- Tab 3: Producten ---
+  // --- Klant Tab 3: Gekoppelde Producten ---
   function renderAppProductenTab(cust, kompas) {
-    var insHtml = (cust.activeInsurances || []).map(function (ins) {
+    var prods = kompas.routeAnalysis.linkedProducts || [];
+    var list = prods.map(function (p) {
       return (
-        '<div style="padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:12px;display:flex;justify-content:space-between;align-items:center;">' +
-          '<div><strong>' + esc(ins.id) + '</strong><small style="display:block;color:#64748b;">' + esc(ins.detail) + '</small></div>' +
-          '<span style="font-weight:700;color:var(--kbc-blue);">€' + ins.monthlyCost.toFixed(2) + '/mnd</span>' +
+        '<div class="product-item-card ' + (p.isOwned ? 'owned' : 'missing') + '">' +
+          '<div style="display:flex;align-items:center;gap:10px;">' +
+            '<span style="font-size:22px;">' + esc(p.icon) + '</span>' +
+            '<div>' +
+              '<strong>' + esc(p.name) + '</strong>' +
+              '<small style="display:block;color:#64748b;font-size:11px;">' + esc(p.costLabel) + ' • ' + (p.mandatory ? 'Verplicht bij aankoop' : 'Aanbevolen') + '</small>' +
+            '</div>' +
+          '</div>' +
+          '<span class="product-status-tag ' + (p.isOwned ? 'owned' : 'missing') + '">' +
+            (p.isOwned ? '✓ Actief' : '+ Ontbreekt nog') +
+          '</span>' +
         '</div>'
       );
     }).join("");
 
     return (
-      '<div class="card-control" style="padding:14px;">' +
-        '<h3 style="font-size:14px;color:var(--kbc-blue);margin-bottom:10px;">Gekoppelde Producten aan ' + esc(kompas.activeGoal.title) + '</h3>' +
-        '<p style="font-size:12px;color:#64748b;margin-bottom:12px;">KBC koppelt automatisch bankieren, verzekeren en beleggen aan jouw gekozen Kompas-bestemming.</p>' +
-        '<div style="display:flex;flex-direction:column;gap:8px;">' +
-          (kompas.goalSpec.linkedProducts || []).map(function (p) {
-            return (
-              '<div style="background:#f8fafc;padding:10px;border-radius:8px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;">' +
-                '<span style="font-size:22px;">' + esc(p.icon) + '</span>' +
-                '<div style="flex:1;">' +
-                  '<strong style="font-size:12px;">' + esc(p.name) + '</strong>' +
-                  '<small style="display:block;color:#64748b;">' + esc(p.costLabel) + ' • ' + (p.mandatory ? 'Aanbevolen' : 'Optioneel') + '</small>' +
-                '</div>' +
-              '</div>'
-            );
-          }).join("") +
-        '</div>' +
-      '</div>' +
-
-      '<div class="card-control" style="padding:14px;">' +
-        '<h4 style="font-size:13px;color:var(--kbc-blue);margin-bottom:10px;">Lopende KBC Verzekeringen</h4>' +
-        insHtml +
+      '<div class="app-card">' +
+        '<h3 style="font-size:14px;color:var(--kbc-blue);margin-bottom:6px;">Producten voor je doel \'' + esc(kompas.activeGoal.title) + '\'</h3>' +
+        '<p style="font-size:11px;color:#64748b;margin-bottom:12px;">KBC koppelt automatisch bank-, verzekerings- en beleggingsproducten die vereist zijn voor je bestemming.</p>' +
+        list +
       '</div>'
     );
   }
 
-  // --- Tab 4: Kate & Persoonlijke Kompas Coach ---
+  // --- Klant Tab 4: Kate AI-Coach ---
   function renderAppKateTab(cust, kompas) {
     return (
-      '<div class="card-control" style="padding:16px;">' +
+      '<div class="app-card kate-chat-card">' +
         '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
-          '<div style="width:40px;height:40px;border-radius:50%;background:var(--kbc-cyan);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;">🤖</div>' +
+          '<div class="kate-avatar">🤖</div>' +
           '<div>' +
-            '<h3 style="font-size:14px;color:var(--kbc-blue);">Kate • Jouw Kompas Co-Piloot</h3>' +
-            '<small style="color:#64748b;">"Ik gok niet meer, jij kiest de richting!"</small>' +
+            '<h3 style="font-size:14px;color:var(--kbc-blue);">Kate • KBC Kompas Coach</h3>' +
+            '<small style="color:#10b981;font-weight:700;">🟢 Online • 100% Proactief &amp; Transparant</small>' +
           '</div>' +
         '</div>' +
 
-        '<div style="background:#f0f9ff;border-left:3px solid var(--kbc-cyan);padding:12px;border-radius:6px;font-size:12px;line-height:1.45;color:#0369a1;margin-bottom:14px;">' +
-          'Hoi ' + esc(cust.name.split(" ")[0]) + '! Je bestemming staat ingesteld op <strong>' + esc(kompas.activeGoal.title) + '</strong>. ' +
-          'Elke maand controleer ik je transacties en loonstorting om te checken of je nog op koers ligt. ' +
-          'Huidige status: <strong>' + esc(kompas.status.label) + '</strong> (Ratio ' + kompas.metrics.ratio + ').' +
+        '<div class="kate-message-bubble">' +
+          '<p>Dag ' + esc(cust.name.split(" ")[0]) + '! Ik hou 24/7 je uitgavenpatroon en doelen in de gaten.</p>' +
+          '<p style="margin-top:6px;"><strong>Status voor ' + esc(kompas.activeGoal.title) + ':</strong> ' + esc(kompas.status.label) + ' (Ratio ' + kompas.metrics.ratio.toFixed(2).replace(".", ",") + ').</p>' +
+          '<p style="margin-top:6px;">' + esc(kompas.status.adviceText) + '</p>' +
         '</div>' +
 
-        '<h4 style="font-size:12px;color:var(--kbc-blue);margin-bottom:8px;">Veelgestelde vragen voor jouw doel:</h4>' +
-        '<button class="quick-action-btn" style="width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;align-items:flex-start;">' +
-          '<strong style="font-size:11px;color:var(--kbc-blue);">❓ Hoe kan ik €50/mnd sneller sparen zonder pijn?</strong>' +
-        '</button>' +
-        '<button class="quick-action-btn" style="width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;align-items:flex-start;">' +
-          '<strong style="font-size:11px;color:var(--kbc-blue);">❓ Welke verzekering is verplicht als ik een huis koop?</strong>' +
-        '</button>' +
-        '<button class="quick-action-btn" style="width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;align-items:flex-start;">' +
-          '<strong style="font-size:11px;color:var(--kbc-blue);">❓ Wat als mijn partner en ik samen willen sparen?</strong>' +
-        '</button>' +
+        '<div class="kate-action-suggestions" style="margin-top:14px;">' +
+          '<small style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Veelgestelde vragen aan Kate:</small>' +
+          '<button class="kate-chip btn-open-steering">Hoe kan ik mijn koers verbeteren?</button>' +
+          '<button class="kate-chip btn-go-settings">Waarom zie ik deze cijfers?</button>' +
+        '</div>' +
       '</div>'
     );
   }
 
-  // --- Tab 5: Instellingen (Mijn Digitaal Profiel & Privacy) ---
+  // --- Klant Tab 5: Mijn Digitaal Profiel & Instellingen ---
   function renderAppSettingsTab(cust, kompas) {
-    var prefs = cust.userPreferences || {};
-    var priv = prefs.privacySettings || {};
+    var breakdown = (kompas.spendingByCategory || []).map(function (b) {
+      return (
+        '<div style="margin-bottom:6px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">' +
+            '<span>' + esc(b.category) + '</span>' +
+            '<strong>' + euro(b.amount) + ' (' + b.pct + '%)</strong>' +
+          '</div>' +
+          '<div class="progress-bar-wrap" style="height:6px;">' +
+            '<div class="progress-bar-fill" style="width:' + b.pct + '%;background:var(--kbc-blue);"></div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
 
     return (
-      '<div class="settings-group">' +
-        '<h4>⚙️ Mijn Digitaal Profiel (Live Bewerkbaar)</h4>' +
-        '<p style="font-size:11px;color:#64748b;margin-bottom:10px;">Pas hier je profielgegevens aan. De KBC-app en je Kompas-koers rekenen direct live mee!</p>' +
+      '<div class="app-card">' +
+        '<h3 style="font-size:14px;color:var(--kbc-blue);margin-bottom:4px;">⚙️ Mijn Digitaal Profiel</h3>' +
+        '<p style="font-size:11px;color:#64748b;margin-bottom:12px;">Bij KBC blijf je zélf de baas over je data en de aannames van het Kompas.</p>' +
 
-        '<div class="setting-row">' +
-          '<span>Naam</span>' +
-          '<input type="text" class="setting-input-text inp-profile-name" value="' + esc(cust.name) + '" />' +
+        '<div class="settings-group">' +
+          '<h4>👤 Persoonlijke Informatie</h4>' +
+          '<div class="setting-row">' +
+            '<span>Naam</span>' +
+            '<input type="text" class="setting-input-text inp-profile-name" value="' + esc(cust.name) + '" />' +
+          '</div>' +
+          '<div class="setting-row">' +
+            '<span>Leeftijd</span>' +
+            '<input type="number" class="setting-input-text inp-profile-age" style="width:60px;" value="' + cust.age + '" />' +
+          '</div>' +
+          '<div class="setting-row">' +
+            '<span>Situatie</span>' +
+            '<select class="setting-select inp-profile-situation">' +
+              '<option value="Student / starter"' + (cust.situation.indexOf("Student") !== -1 ? ' selected' : '') + '>Student / starter</option>' +
+              '<option value="Samenwonend koppel"' + (cust.situation.indexOf("Samenwonend") !== -1 ? ' selected' : '') + '>Samenwonend koppel</option>' +
+              '<option value="Jong gezin"' + (cust.situation.indexOf("gezin") !== -1 ? ' selected' : '') + '>Gezin</option>' +
+              '<option value="Senior"' + (cust.situation.indexOf("Senior") !== -1 ? ' selected' : '') + '>Senior</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="setting-row">' +
+            '<span>Koppelmodus Actief</span>' +
+            '<input type="checkbox" class="chk-couple-mode"' + (cust.isCoupleMode ? ' checked' : '') + ' />' +
+          '</div>' +
         '</div>' +
 
-        '<div class="setting-row">' +
-          '<span>Leeftijd</span>' +
-          '<input type="number" class="setting-input-text inp-profile-age" style="width:70px;" value="' + cust.age + '" />' +
+        '<div class="settings-group">' +
+          '<h4>💰 Financiële Parameters (3-Maands Gemiddelde)</h4>' +
+          '<div class="setting-row">' +
+            '<span>Maandinkomen</span>' +
+            '<input type="number" class="setting-input-text inp-profile-income" value="' + Math.round(cust.avgMonthlyIncome3m) + '" />' +
+          '</div>' +
+          '<div class="setting-row">' +
+            '<span>Maanduitgaven</span>' +
+            '<input type="number" class="setting-input-text inp-profile-expenses" value="' + Math.round(cust.avgMonthlyExpenses3m) + '" />' +
+          '</div>' +
+          '<div class="setting-row">' +
+            '<span>Huidige Spaarbuffer</span>' +
+            '<input type="number" class="setting-input-text inp-profile-savings" value="' + Math.round(cust.accounts.savingsBalance) + '" />' +
+          '</div>' +
+          '<button class="btn-save-profile" style="width:100%;margin-top:10px;background:var(--kbc-blue);color:#fff;border:none;padding:8px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">' +
+            '💾 Wijzigingen Opslaan &amp; Herberekenen' +
+          '</button>' +
         '</div>' +
 
-        '<div class="setting-row">' +
-          '<span>Gezinssituatie</span>' +
-          '<input type="text" class="setting-input-text inp-profile-situation" value="' + esc(cust.situation) + '" />' +
-        '</div>' +
-
-        '<div class="setting-row">' +
-          '<span>Koppelmodus</span>' +
-          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">' +
-            '<input type="checkbox" class="chk-couple-mode" ' + (cust.isCoupleMode ? 'checked' : '') + ' />' +
-            '<small>' + (cust.isCoupleMode ? 'Samen sparen met partner' : 'Alleen') + '</small>' +
-          '</label>' +
-        '</div>' +
-
-        '<div class="setting-row">' +
-          '<span>Gem. Maandinkomen (3 mnd)</span>' +
-          '<input type="number" class="setting-input-text inp-profile-income" style="width:100px;" value="' + Math.round(cust.avgMonthlyIncome3m) + '" />' +
-        '</div>' +
-
-        '<div class="setting-row">' +
-          '<span>Gem. Maanduitgaven (3 mnd)</span>' +
-          '<input type="number" class="setting-input-text inp-profile-expenses" style="width:100px;" value="' + Math.round(cust.avgMonthlyExpenses3m) + '" />' +
-        '</div>' +
-
-        '<div class="setting-row">' +
-          '<span>Huidig Spaargeld</span>' +
-          '<input type="number" class="setting-input-text inp-profile-savings" style="width:100px;" value="' + Math.round(cust.accounts.savingsBalance) + '" />' +
-        '</div>' +
-
-        '<button class="btn-save-profile" style="width:100%;margin-top:10px;background:var(--kbc-blue);color:#fff;border:none;padding:8px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">' +
-          '💾 Profiel-Wijzigingen Opslaan' +
-        '</button>' +
-      '</div>' +
-
-      // "Waarom zie ik dit?"
-      '<div class="settings-group">' +
-        '<h4>🔍 "Waarom zie ik dit?" (Cijfer-Uitleg)</h4>' +
+        '<!-- Explainable AI Box -->' +
         '<div class="explain-box">' +
-          '<strong>Gebruikte Kompas-Formule &amp; Data:</strong>' +
-          '• Spaarcapaciteit = Inkomen (€' + kompas.metrics.avgIncome3m + ') - Uitgaven (€' + kompas.metrics.avgExpenses3m + ') = <strong>€' + kompas.metrics.savingsCapacity + ' / mnd</strong>.<br/>' +
-          '• Doelbedrag: €' + kompas.metrics.targetAmount.toLocaleString("nl-BE") + ' - Gespaard: €' + kompas.metrics.savedAmount.toLocaleString("nl-BE") + ' = Resterend €' + kompas.metrics.remainingAmount.toLocaleString("nl-BE") + '.<br/>' +
-          '• Nodig per maand over ' + kompas.metrics.monthsToDeadline + ' mnd = <strong>€' + kompas.metrics.neededPerMonth + ' / mnd</strong>.<br/>' +
-          '• Ratio = ' + kompas.metrics.savingsCapacity + ' / ' + kompas.metrics.neededPerMonth + ' = <strong>' + kompas.metrics.ratio + ' (' + esc(kompas.status.label) + ')</strong>.' +
+          '<strong>💡 Waarom zie ik deze koers? (Transparantie)</strong>' +
+          '<p>KBC berekent je spaarcapaciteit op basis van je geanonimiseerde transacties over de voorbije 3 maanden. Er wordt geen data verkocht of gedeeld met derden.</p>' +
+          '<div style="margin-top:8px;">' + breakdown + '</div>' +
         '</div>' +
-      '</div>' +
-
-      // Privacy Schakelaars
-      '<div class="settings-group">' +
-        '<h4>🛡️ Privacy &amp; Toegestane Data</h4>' +
-        '<div class="setting-row"><span>Transactie-analyse (3 mnd)</span><input type="checkbox" class="chk-priv-tx" ' + (priv.allowTransactionAnalysis ? 'checked' : '') + ' /></div>' +
-        '<div class="setting-row"><span>Loon- &amp; Inkomensdetectie</span><input type="checkbox" class="chk-priv-inc" ' + (priv.allowIncomeTracking ? 'checked' : '') + ' /></div>' +
-        '<div class="setting-row"><span>Product- &amp; Verzekeringskoppeling</span><input type="checkbox" class="chk-priv-prod" ' + (priv.allowProductMatching ? 'checked' : '') + ' /></div>' +
-        '<div class="setting-row"><span>Inzicht delen met KBC Adviseur</span><input type="checkbox" class="chk-priv-adv" ' + (priv.allowAdvisorSharing ? 'checked' : '') + ' /></div>' +
       '</div>'
     );
   }
 
-  // --- Modal: Bijsturen (3 Opties van Jasper!) ---
+  // --- Modal: Bijsturen van het Kompas (De 3 Opties) ---
   function renderSteeringModal(cust, kompas) {
     var opts = kompas.steeringOptions || [];
     var optsHtml = opts.map(function (opt) {
       return (
-        '<div class="steering-option-card ' + (opt.recommended ? 'recommended' : '') + '" data-opt-id="' + esc(opt.id) + '">' +
+        '<div class="steering-option-card ' + (opt.recommended ? 'recommended' : '') + '" data-opt-type="' + esc(opt.type) + '">' +
           '<span class="opt-radio-icon">' + esc(opt.icon) + '</span>' +
-          '<div class="opt-details" style="flex:1;">' +
-            '<strong>' + esc(opt.title) + '</strong>' +
+          '<div class="opt-details">' +
+            '<strong>' + esc(opt.title) + ' ' + (opt.recommended ? '<span style="color:#10b981;font-size:10px;">(AANBEVOLEN)</span>' : '') + '</strong>' +
             '<small>' + esc(opt.subtitle) + '</small>' +
             '<span class="opt-impact">' + esc(opt.impactLabel) + '</span>' +
           '</div>' +
-          '<button class="btn-apply-steering" data-opt-type="' + esc(opt.type) + '" style="background:var(--kbc-blue);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">' +
-            'Kies &gt;' +
+          '<button class="btn-apply-steering" data-opt-type="' + esc(opt.type) + '" style="background:var(--kbc-blue);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' +
+            'Kies &rarr;' +
           '</button>' +
         '</div>'
       );
@@ -579,19 +569,19 @@ window.KBCAura = window.KBCAura || {};
       '<div class="kbc-modal-backdrop">' +
         '<div class="kbc-modal-sheet">' +
           '<div class="kbc-modal-header">' +
-            '<h3>⚡ KBC Kompas Bijsturen</h3>' +
+            '<h3>⚡ Kompas Bijsturen: Maak je plan haalbaar</h3>' +
             '<button class="btn-close-modal">✕</button>' +
           '</div>' +
-          '<p style="font-size:12px;color:#64748b;margin-bottom:14px;">' +
-            'Jij bepaalt de richting! Kies hoe je jouw plan voor <strong>\'' + esc(kompas.activeGoal.title) + '\'</strong> weer gezond op koers brengt:' +
+          '<p style="font-size:12px;color:#64748b;margin-bottom:12px;">' +
+            'Je spaarcapaciteit is momenteel <strong>' + euro(kompas.metrics.savingsCapacity) + '/mnd</strong>, maar voor je huidige doel heb je <strong>' + euro(kompas.metrics.neededPerMonth) + '/mnd</strong> nodig. Kies hoe je wilt corrigeren:' +
           '</p>' +
-          optsHtml +
+          '<div class="steering-options-list">' + optsHtml + '</div>' +
         '</div>' +
       '</div>'
     );
   }
 
-  // --- Modal: 3-Vragen Onboarding Wizard (1 minuut) ---
+  // --- Modal: Onboarding (Nieuw Doel Kiezen) ---
   function renderOnboardingModal(cust) {
     var cat = window.KBCAura.GoalCatalog || {};
     var step1Html = Object.keys(cat).map(function (k) {
@@ -600,10 +590,10 @@ window.KBCAura = window.KBCAura || {};
       return (
         '<button class="goal-pick-btn" data-goal-type="' + k + '" style="background:' + (isSel ? '#f0f9ff' : '#fff') + ';border:2px solid ' + (isSel ? 'var(--kbc-cyan)' : '#e2e8f0') + ';border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left;width:100%;margin-bottom:8px;">' +
           '<span style="font-size:24px;">' + esc(g.icon) + '</span>' +
-          '<div>' +
+          '<span>' +
             '<strong style="font-size:13px;color:var(--kbc-blue);">' + esc(g.title) + '</strong>' +
-            '<small style="display:block;color:#64748b;font-size:11px;">Standaard richtbedrag: €' + g.defaultTargetAmount.toLocaleString("nl-BE") + ' over ' + g.defaultMonths + ' mnd</small>' +
-          '</div>' +
+            '<small style="display:block;color:#64748b;font-size:11px;">Standaard richtbedrag: ' + euro(g.defaultTargetAmount) + ' over ' + g.defaultMonths + ' mnd</small>' +
+          '</span>' +
         '</button>'
       );
     }).join("");
@@ -618,7 +608,7 @@ window.KBCAura = window.KBCAura || {};
 
           (state.onboardingStep === 1
             ? '<div>' +
-                '<p style="font-size:12px;color:#64748b;margin-bottom:12px;"><strong>Vraag 1:</strong> Wat is je belangrijkste levensdoel voor de komende 5 jaar?</p>' +
+                '<p style="font-size:12px;color:#64748b;margin-bottom:12px;"><strong>Vraag 1:</strong> Wat is je belangrijkste levensdoel voor de komende jaren?</p>' +
                 step1Html +
                 '<button class="btn-onboarding-next" style="width:100%;margin-top:10px;background:var(--kbc-blue);color:#fff;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">' +
                   'Volgende Stap &rarr;' +
@@ -628,7 +618,7 @@ window.KBCAura = window.KBCAura || {};
               ? '<div>' +
                   '<p style="font-size:12px;color:#64748b;margin-bottom:12px;"><strong>Vraag 2:</strong> Welk bedrag en welke deadline heb je voor ogen?</p>' +
                   '<div style="margin-bottom:12px;">' +
-                    '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px;">Doelbedrag: €' + state.tempNewGoal.targetAmount.toLocaleString("nl-BE") + '</label>' +
+                    '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px;">Doelbedrag: ' + euro(state.tempNewGoal.targetAmount) + '</label>' +
                     '<input type="range" class="rng-onboarding-amount" min="2000" max="100000" step="1000" value="' + state.tempNewGoal.targetAmount + '" style="width:100%;" />' +
                   '</div>' +
                   '<div style="margin-bottom:16px;">' +
@@ -645,6 +635,10 @@ window.KBCAura = window.KBCAura || {};
     );
   }
 
+  // =========================================================================
+  // 2. KBC-MEDEWERKER PORTAAL (200 KLANTEN & DIEPGAAND DOSSIER)
+  // =========================================================================
+
   function getStaffCustomersFiltered() {
     var syn = (window.KBCAura.Synthetic200Customers && window.KBCAura.Synthetic200Customers.customers) || [];
     var q = (state.staffSearch || "").trim().toLowerCase();
@@ -653,7 +647,7 @@ window.KBCAura = window.KBCAura || {};
       if (state.staffGoal !== "ALL" && c.goalType !== state.staffGoal) return false;
       if (state.staffCity !== "ALL" && c.city !== state.staffCity) return false;
       if (q) {
-        var hay = (c.name + " " + c.id + " " + c.customerNumber + " " + c.city + " " + c.occupation + " " + c.email + " " + c.goalLabel).toLowerCase();
+        var hay = (c.name + " " + c.id + " " + c.customerNumber + " " + c.city + " " + c.occupation + " " + c.email + " " + c.goalLabel + " " + c.advisorName).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
       return true;
@@ -675,6 +669,8 @@ window.KBCAura = window.KBCAura || {};
     if (state.staffPage > totalPages) state.staffPage = totalPages;
     var start = (state.staffPage - 1) * state.staffPageSize;
     var pageRows = filtered.slice(start, start + state.staffPageSize);
+
+    // Steden voor filter
     var cities = [];
     (dash.customers || []).forEach(function (c) {
       if (cities.indexOf(c.city) === -1) cities.push(c.city);
@@ -685,16 +681,19 @@ window.KBCAura = window.KBCAura || {};
     var pctOk = Math.round((dash.statusCounts.OP_KOERS / n) * 100);
     var pctWarn = Math.round((dash.statusCounts.BIJSTUREN / n) * 100);
     var pctRisk = Math.round((dash.statusCounts.PLAN_AANPASSEN / n) * 100);
+
     var goalMax = 1;
     Object.keys(dash.goalCounts || {}).forEach(function (k) {
       if (dash.goalCounts[k] > goalMax) goalMax = dash.goalCounts[k];
     });
+
     var goalBars = Object.keys(dash.goalCounts || {}).map(function (k) {
       var cnt = dash.goalCounts[k] || 0;
       var w = Math.round((cnt / goalMax) * 100);
+      var icons = { woning: "🏡", kot: "🎓", reis: "✈️", auto: "🚗", gezin: "👶", pensioen: "🏖️" };
       return (
         '<div class="staff-goal-row">' +
-          '<span>' + esc(k) + '</span>' +
+          '<span class="staff-goal-label">' + (icons[k] || "🎯") + ' ' + esc(k.charAt(0).toUpperCase() + k.slice(1)) + '</span>' +
           '<div class="staff-goal-track"><div class="staff-goal-fill" style="width:' + w + '%"></div></div>' +
           '<strong>' + cnt + '</strong>' +
         '</div>'
@@ -711,136 +710,188 @@ window.KBCAura = window.KBCAura || {};
               '<span class="staff-avatar">' + esc(c.initials) + '</span>' +
               '<div>' +
                 '<strong>' + esc(c.name) + '</strong>' +
-                '<small>' + esc(c.customerNumber) + ' · ' + c.age + ' j</small>' +
+                '<small>' + esc(c.customerNumber) + ' • ' + c.age + ' j</small>' +
               '</div>' +
             '</div>' +
           '</td>' +
-          '<td>' + esc(c.city) + '<small class="muted-block">' + esc(c.situation) + '</small></td>' +
           '<td>' +
-            esc(c.goalLabel) +
-            '<div class="mini-progress"><div style="width:' + progress + '%"></div></div>' +
-            '<small class="muted-block">' + euro(c.savedAmount) + ' / ' + euro(c.targetAmount) + '</small>' +
+            '<strong>' + esc(c.city) + '</strong>' +
+            '<small class="muted-block">' + esc(c.situation) + '</small>' +
           '</td>' +
-          '<td>' + euro(c.savingsCapacity) + '<small class="muted-block">nodig ' + euro(c.neededPerMonth) + '</small></td>' +
-          '<td>' + esc(c.advisorName.split(" ")[0]) + '<small class="muted-block">' + esc(c.lastContactAt) + '</small></td>' +
-          '<td><span class="staff-status staff-status-' + sm.cls + '">' + esc(sm.label) + ' · ' + String(c.ratio).replace(".", ",") + '</span></td>' +
+          '<td>' +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span>' + esc(c.goalIcon || "🎯") + '</span>' +
+              '<strong>' + esc(c.goalLabel) + '</strong>' +
+            '</div>' +
+            '<div class="mini-progress"><div style="width:' + progress + '%;background:' + sm.color + '"></div></div>' +
+            '<small class="muted-block">' + euro(c.savedAmount) + ' / ' + euro(c.targetAmount) + ' (' + progress + '%)</small>' +
+          '</td>' +
+          '<td>' +
+            '<strong style="color:var(--kbc-blue);">' + euro(c.savingsCapacity) + '/mnd</strong>' +
+            '<small class="muted-block">Nodig: ' + euro(c.neededPerMonth) + '/mnd</small>' +
+          '</td>' +
+          '<td>' +
+            '<span>' + esc(c.advisorName) + '</span>' +
+            '<small class="muted-block">' + esc(c.advisorBranch.replace("KBC ", "")) + ' • ' + esc(c.lastContactAt) + '</small>' +
+          '</td>' +
+          '<td>' +
+            '<span class="staff-status staff-status-' + sm.cls + '">' +
+              sm.dot + ' ' + esc(sm.label) + ' (' + String(c.ratio).replace(".", ",") + ')' +
+            '</span>' +
+          '</td>' +
+          '<td style="text-align:right;">' +
+            '<button class="staff-view-btn" data-staff-id="' + esc(c.id) + '">Dossier bekijken &rarr;</button>' +
+          '</td>' +
         '</tr>'
       );
     }).join("");
 
     if (!rowsHtml) {
-      rowsHtml = '<tr><td colspan="6" class="staff-empty">Geen klanten voor deze filters.</td></tr>';
+      rowsHtml = '<tr><td colspan="7" class="staff-empty">Geen klanten gevonden voor deze filters of zoekopdracht.</td></tr>';
     }
 
-    var cityOpts = '<option value="ALL">Alle steden</option>' + cities.map(function (city) {
+    var cityOpts = '<option value="ALL">Alle steden (' + cities.length + ')</option>' + cities.map(function (city) {
       return '<option value="' + esc(city) + '"' + (state.staffCity === city ? " selected" : "") + ">" + esc(city) + "</option>";
     }).join("");
 
     return (
       '<div class="staff-shell">' +
+        '<!-- Medewerker Banner -->' +
         '<div class="staff-banner">' +
           '<div>' +
-            '<p class="staff-kicker">Intern · KBC-medewerker</p>' +
-            '<h2>Portefeuille Kompas</h2>' +
-            '<p>Overzicht van 200 klanten. Tik op een rij voor het volledige dossier, transacties en contacthistorie. De klant ziet dit scherm nooit.</p>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+              '<span class="staff-kicker">KBC PRO • INTERNE MEDEWERKER INTERFACE</span>' +
+              '<span style="background:rgba(255,255,255,0.18);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;">Niet zichtbaar voor de klant</span>' +
+            '</div>' +
+            '<h2>Portefeuille Kompas Overzicht (200 Klanten)</h2>' +
+            '<p>Live analyse over 200 Belgische cliënten dossiers. Tik op een willekeurige klant voor het diepgaande profiel, 12-maands cashflow, transactiehistorie en adviestips.</p>' +
           '</div>' +
           '<div class="staff-banner-meta">' +
-            '<span>Laatste berekening: 30 sep 2026</span>' +
-            '<span>' + (dash.totalTransactions || 0).toLocaleString("nl-BE") + ' transacties (12 mnd)</span>' +
+            '<span>Peildatum: 30 september 2026</span>' +
+            '<span>14.400 gesimuleerde transacties (12 mnd)</span>' +
+            '<span>Engine: KBC Kompas v1.4.2</span>' +
           '</div>' +
         '</div>' +
 
+        '<!-- KPI Kaarten -->' +
         '<div class="staff-kpis">' +
           '<article class="staff-kpi">' +
-            '<small>Klanten in portefeuille</small>' +
-            '<strong>' + dash.totalCustomers + '</strong>' +
-            '<em>Doelvolume ' + euro(dash.totalTargetVolume) + '</em>' +
+            '<small>Totaal in portefeuille</small>' +
+            '<strong>' + dash.totalCustomers + ' dossiers</strong>' +
+            '<em>Doelvolume: ' + euro(dash.totalTargetVolume) + '</em>' +
+            '<div class="kpi-bar"><span style="width:100%;background:#003665;"></span></div>' +
           '</article>' +
           '<article class="staff-kpi kpi-ok">' +
-            '<small>Op koers</small>' +
-            '<strong>' + dash.statusCounts.OP_KOERS + '</strong>' +
+            '<small>🟢 Op koers (Ratio &ge; 1,0)</small>' +
+            '<strong>' + dash.statusCounts.OP_KOERS + ' klanten</strong>' +
             '<em>' + pctOk + '% van de portefeuille</em>' +
             '<div class="kpi-bar"><span style="width:' + pctOk + '%"></span></div>' +
           '</article>' +
           '<article class="staff-kpi kpi-warn">' +
-            '<small>Bijsturen</small>' +
-            '<strong>' + dash.statusCounts.BIJSTUREN + '</strong>' +
-            '<em>' + pctWarn + '% · gesprek inplannen</em>' +
+            '<small>🟠 Bijsturen (0,70 &le; Ratio &lt; 1,0)</small>' +
+            '<strong>' + dash.statusCounts.BIJSTUREN + ' klanten</strong>' +
+            '<em>' + pctWarn + '% • adviesgesprek inplannen</em>' +
             '<div class="kpi-bar"><span style="width:' + pctWarn + '%"></span></div>' +
           '</article>' +
           '<article class="staff-kpi kpi-risk">' +
-            '<small>Plan aanpassen</small>' +
-            '<strong>' + dash.statusCounts.PLAN_AANPASSEN + '</strong>' +
-            '<em>' + pctRisk + '% · prioriteit kantoor</em>' +
+            '<small>🔴 Plan Aanpassen (Ratio &lt; 0,70)</small>' +
+            '<strong>' + dash.statusCounts.PLAN_AANPASSEN + ' klanten</strong>' +
+            '<em>' + pctRisk + '% • prioriteit kantoorinterventie</em>' +
             '<div class="kpi-bar"><span style="width:' + pctRisk + '%"></span></div>' +
           '</article>' +
         '</div>' +
 
+        '<!-- Grafieken & Legende -->' +
         '<div class="staff-grid-2">' +
           '<div class="staff-card">' +
-            '<h3>Verdeling per doeltype</h3>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+              '<h3>Verdeling per doeltype (200 dossiers)</h3>' +
+              '<small style="color:#64748b;">Gespaard: ' + euro(dash.totalSavedVolume) + '</small>' +
+            '</div>' +
             goalBars +
           '</div>' +
           '<div class="staff-card staff-legend">' +
-            '<h3>Hoe lees je dit?</h3>' +
-            '<p>Zelfde engine als in de klantapp: spaarcapaciteit (3 maanden) versus nodig per maand tot de deadline.</p>' +
+            '<h3>Wat betekent dit voor de KBC-adviseur?</h3>' +
+            '<p>De Kompas-engine berekent automatisch per klant de verhouding tussen <strong>reële spaarcapaciteit</strong> (laatste 3 maanden) en <strong>nodig per maand</strong> tot de gekozen deadline.</p>' +
             '<ul>' +
-              '<li><span class="dot ok"></span> Ratio ≥ 1,0 — op schema</li>' +
-              '<li><span class="dot warn"></span> 0,7–1,0 — bijsturen</li>' +
-              '<li><span class="dot risk"></span> &lt; 0,7 — plan herzien</li>' +
+              '<li><span class="dot ok"></span> <strong>Op Koers (&ge; 1,00):</strong> Doel is gezond haalbaar. Koppel beschermings- of verzekeringsproducten (bv. woonpolis, reisverzekering).</li>' +
+              '<li><span class="dot warn"></span> <strong>Bijsturen (0,70 - 0,99):</strong> Kleine buffer-gap. Reik de 3 bijstuurknoppen aan (deadline uitstellen, bedrag verlagen of uitgaven optimaliseren).</li>' +
+              '<li><span class="dot risk"></span> <strong>Aanpassen (&lt; 0,70):</strong> Financieel te zwaar. Klant raakt ontmoedigd. Adviseur stelt een realistischer tijdschema voor.</li>' +
             '</ul>' +
-            '<p class="staff-hint">Gespaard volume: ' + euro(dash.totalSavedVolume) + ' van ' + euro(dash.totalTargetVolume) + '</p>' +
           '</div>' +
         '</div>' +
 
+        '<!-- Toolbar & 200-Klanten Tabel -->' +
         '<div class="staff-card staff-table-card">' +
           '<div class="staff-toolbar">' +
             '<form class="staff-search-form">' +
-              '<input class="staff-search" type="search" placeholder="Zoek naam, nummer, stad, doel…" value="' + esc(state.staffSearch) + '" />' +
+              '<input class="staff-search" type="search" placeholder="🔍 Zoek op naam, klantnummer, beroep, gemeente of adviseur..." value="' + esc(state.staffSearch) + '" />' +
               '<button type="submit" class="staff-btn-primary">Zoeken</button>' +
+              (state.staffSearch ? '<button type="button" class="staff-btn-clear">Wis</button>' : '') +
             '</form>' +
             '<div class="staff-filters">' +
-              '<button class="chip ' + (state.staffStatus === "ALL" ? "on" : "") + '" data-staff-status="ALL">Alle statussen</button>' +
-              '<button class="chip ' + (state.staffStatus === "OP_KOERS" ? "on" : "") + '" data-staff-status="OP_KOERS">Op koers</button>' +
-              '<button class="chip ' + (state.staffStatus === "BIJSTUREN" ? "on" : "") + '" data-staff-status="BIJSTUREN">Bijsturen</button>' +
-              '<button class="chip ' + (state.staffStatus === "PLAN_AANPASSEN" ? "on" : "") + '" data-staff-status="PLAN_AANPASSEN">Aanpassen</button>' +
+              '<span style="font-size:12px;font-weight:700;color:#64748b;margin-right:4px;">Status:</span>' +
+              '<button class="chip ' + (state.staffStatus === "ALL" ? "on" : "") + '" data-staff-status="ALL">Alle (' + dash.totalCustomers + ')</button>' +
+              '<button class="chip ' + (state.staffStatus === "OP_KOERS" ? "on" : "") + '" data-staff-status="OP_KOERS">🟢 Op koers (' + dash.statusCounts.OP_KOERS + ')</button>' +
+              '<button class="chip ' + (state.staffStatus === "BIJSTUREN" ? "on" : "") + '" data-staff-status="BIJSTUREN">🟠 Bijsturen (' + dash.statusCounts.BIJSTUREN + ')</button>' +
+              '<button class="chip ' + (state.staffStatus === "PLAN_AANPASSEN" ? "on" : "") + '" data-staff-status="PLAN_AANPASSEN">🔴 Aanpassen (' + dash.statusCounts.PLAN_AANPASSEN + ')</button>' +
+              '<span style="font-size:12px;font-weight:700;color:#64748b;margin-left:8px;margin-right:4px;">Doel:</span>' +
               '<select class="staff-select" data-staff-goal="1">' +
                 '<option value="ALL"' + (state.staffGoal === "ALL" ? " selected" : "") + '>Alle doelen</option>' +
-                '<option value="woning"' + (state.staffGoal === "woning" ? " selected" : "") + '>Woning</option>' +
-                '<option value="kot"' + (state.staffGoal === "kot" ? " selected" : "") + '>Kot</option>' +
-                '<option value="reis"' + (state.staffGoal === "reis" ? " selected" : "") + '>Reis</option>' +
-                '<option value="auto"' + (state.staffGoal === "auto" ? " selected" : "") + '>Auto</option>' +
-                '<option value="gezin"' + (state.staffGoal === "gezin" ? " selected" : "") + '>Gezin</option>' +
-                '<option value="pensioen"' + (state.staffGoal === "pensioen" ? " selected" : "") + '>Pensioen</option>' +
+                '<option value="woning"' + (state.staffGoal === "woning" ? " selected" : "") + '>🏡 Woning</option>' +
+                '<option value="kot"' + (state.staffGoal === "kot" ? " selected" : "") + '>🎓 Kot</option>' +
+                '<option value="reis"' + (state.staffGoal === "reis" ? " selected" : "") + '>✈️ Grote reis</option>' +
+                '<option value="auto"' + (state.staffGoal === "auto" ? " selected" : "") + '>🚗 Eerste auto</option>' +
+                '<option value="gezin"' + (state.staffGoal === "gezin" ? " selected" : "") + '>👶 Gezin</option>' +
+                '<option value="pensioen"' + (state.staffGoal === "pensioen" ? " selected" : "") + '>🏖️ Pensioen</option>' +
               '</select>' +
+              '<span style="font-size:12px;font-weight:700;color:#64748b;margin-left:8px;margin-right:4px;">Regio:</span>' +
               '<select class="staff-select" data-staff-city="1">' + cityOpts + '</select>' +
             '</div>' +
           '</div>' +
-          '<p class="staff-count">' + filtered.length + ' resultaten · pagina ' + state.staffPage + ' / ' + totalPages + ' · tik een rij voor het dossier</p>' +
+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 8px;">' +
+            '<p class="staff-count">Weergegeven: <strong>' + filtered.length + ' van de 200 klanten</strong> (Pagina ' + state.staffPage + ' van ' + totalPages + ') • Klik op een rij om het volledige dossier te openen</p>' +
+            '<div class="staff-pager">' +
+              '<button class="staff-page-btn" data-staff-page="-1"' + (state.staffPage <= 1 ? " disabled" : "") + '>&larr; Vorige</button>' +
+              '<span style="font-size:12px;color:#64748b;align-self:center;">Pagina ' + state.staffPage + ' / ' + totalPages + '</span>' +
+              '<button class="staff-page-btn" data-staff-page="1"' + (state.staffPage >= totalPages ? " disabled" : "") + '>Volgende &rarr;</button>' +
+            '</div>' +
+          '</div>' +
+
           '<div class="staff-table-wrap">' +
             '<table class="staff-table">' +
               '<thead>' +
                 '<tr>' +
-                  '<th>Klant</th><th>Locatie</th><th>Doel &amp; voortgang</th><th>Cap / nodig</th><th>Adviseur</th><th>Status</th>' +
+                  '<th>Klant</th>' +
+                  '<th>Woonplaats</th>' +
+                  '<th>Kompas Doel &amp; Voortgang</th>' +
+                  '<th>Spaarcap. / Nodig</th>' +
+                  '<th>Toegewezen Adviseur</th>' +
+                  '<th>Status &amp; Ratio</th>' +
+                  '<th style="text-align:right;">Actie</th>' +
                 '</tr>' +
               '</thead>' +
               '<tbody>' + rowsHtml + '</tbody>' +
             '</table>' +
           '</div>' +
-          '<div class="staff-pager">' +
-            '<button class="staff-page-btn" data-staff-page="-1"' + (state.staffPage <= 1 ? " disabled" : "") + '>Vorige</button>' +
-            '<button class="staff-page-btn" data-staff-page="1"' + (state.staffPage >= totalPages ? " disabled" : "") + '>Volgende</button>' +
+
+          '<div class="staff-pager" style="margin-top:16px;">' +
+            '<button class="staff-page-btn" data-staff-page="-1"' + (state.staffPage <= 1 ? " disabled" : "") + '>&larr; Vorige</button>' +
+            '<button class="staff-page-btn" data-staff-page="1"' + (state.staffPage >= totalPages ? " disabled" : "") + '>Volgende &rarr;</button>' +
           '</div>' +
         '</div>' +
       '</div>'
     );
   }
 
+  // --- DIEPGAAND DOSSIER VAN 1 SPECIFIEKE PERSOON ---
   function renderStaffDossier(c) {
     var sm = statusMeta(c.status);
     var progress = Math.min(100, Math.round((c.savedAmount / Math.max(1, c.targetAmount)) * 100));
     var gap = Math.max(0, c.neededPerMonth - c.savingsCapacity);
     var tab = state.staffDossierTab;
+
     var extraMonths = c.savingsCapacity > 0
       ? Math.max(0, Math.ceil((c.targetAmount - c.savedAmount) / c.savingsCapacity) - c.monthsToDeadline)
       : c.monthsToDeadline;
@@ -848,142 +899,241 @@ window.KBCAura = window.KBCAura || {};
     var tips;
     if (c.status === "OP_KOERS") {
       tips = [
-        "Bevestig dat het doel nog klopt (bedrag en timing).",
-        "Koppel passend product: " + c.linkedProduct + ".",
-        "Vraag of er een tweede doel bij mag (buffer / verzekering)."
+        "Feliciteer de klant: het Kompas staat op koers met een ratio van " + c.ratio + ".",
+        "Bevestig of het doelbedrag van " + euro(c.targetAmount) + " en de timing over " + c.monthsToDeadline + " maanden nog aansluiten bij de plannen.",
+        "Koppel het passende beschermingsproduct: " + c.linkedProduct + ".",
+        "Onderzoek of er een tweede doel kan worden geactiveerd (bv. fiscale pensioenopbouw of een veilige noodbuffer)."
       ];
     } else if (c.status === "BIJSTUREN") {
       tips = [
-        "Toon de drie opties: deadline +" + extraMonths + " mnd, lager bedrag, of extra sparen.",
-        "Cap is " + euro(c.savingsCapacity) + "/mnd, nodig " + euro(c.neededPerMonth) + " — gat " + euro(gap) + ".",
-        "Check recente verrassingsuitgaven in de historie."
+        "Toon de klant de 3 concrete bijstuur-opties: deadline verschuiven met " + extraMonths + " maanden, doelbedrag verlagen naar " + euro(c.savedAmount + (c.savingsCapacity * c.monthsToDeadline)) + ", of maandelijks " + euro(gap) + " extra besparen.",
+        "De spaarcapaciteit is " + euro(c.savingsCapacity) + "/mnd, maar er is " + euro(c.neededPerMonth) + "/mnd nodig (maandelijks tekort: " + euro(gap) + ").",
+        "Bekijk samen de categorieën abonnementen en uitgaven om te zien waar er structurele ademruimte zit."
       ];
     } else {
       tips = [
-        "Plan is te strak. Stel een haalbaar bedrag of langere horizon voor.",
-        "Niet pushen op extra product tot het doel realistisch is.",
-        "Noteer consent: uitleg waarom dit voorstel op het doel gebaseerd is."
+        "Het huidige plan is te strak: KBC raadt af om dit tempo geforceerd vol te houden, omdat het de gezinsbuffer kan aantasten.",
+        "Verhoog de deadline of stel een haalbaarder tussendoel voor om de koers terug boven 1,00 te krijgen.",
+        "Pushen op extra commerciële producten vermijden zolang het primaire levensdoel niet op schema staat.",
+        "Zorg voor transparantie conform GDPR en AI Act: leg uit welke reële transacties aan de basis liggen van dit advies."
       ];
     }
 
+    // Tab 1: Overzicht
     var overzicht =
       '<div class="dossier-grid">' +
+        '<!-- Profielgegevens -->' +
         '<section class="staff-card">' +
-          '<h3>Profiel</h3>' +
+          '<h3>👤 Klantidentiteit &amp; Gezin</h3>' +
           '<dl class="dossier-dl">' +
-            '<div><dt>Klantnummer</dt><dd>' + esc(c.customerNumber) + '</dd></div>' +
+            '<div><dt>Klantnummer</dt><dd><strong>' + esc(c.customerNumber) + '</strong></dd></div>' +
             '<div><dt>Adres</dt><dd>' + esc(c.address) + '</dd></div>' +
             '<div><dt>E-mail</dt><dd>' + esc(c.email) + '</dd></div>' +
             '<div><dt>Telefoon</dt><dd>' + esc(c.phone) + '</dd></div>' +
             '<div><dt>Beroep</dt><dd>' + esc(c.occupation) + '</dd></div>' +
-            '<div><dt>Gezin</dt><dd>' + esc(c.householdStatus) + '</dd></div>' +
-            '<div><dt>Klant sinds</dt><dd>' + esc(c.kbcSince) + '</dd></div>' +
-            '<div><dt>Kantoor</dt><dd>' + esc(c.advisorBranch) + ' · ' + esc(c.advisorName) + '</dd></div>' +
+            '<div><dt>Situatie</dt><dd>' + esc(c.householdStatus) + '</dd></div>' +
+            '<div><dt>Klant bij KBC sinds</dt><dd>' + esc(c.kbcSince) + ' (' + (2026 - parseInt(c.kbcSince, 10)) + ' jaar cliënt)</dd></div>' +
+            '<div><dt>Vaste Adviseur</dt><dd>' + esc(c.advisorName) + ' (' + esc(c.advisorBranch) + ')</dd></div>' +
           '</dl>' +
         '</section>' +
+
+        '<!-- Kompas Doelstatus -->' +
         '<section class="staff-card">' +
-          '<h3>Kompas</h3>' +
-          '<p class="dossier-goal">' + esc(c.goalLabel) + '</p>' +
+          '<h3>🧭 Kompas Koers &amp; Rekencijfers</h3>' +
+          '<p class="dossier-goal">' + esc(c.goalIcon || "🎯") + ' ' + esc(c.goalLabel) + '</p>' +
           '<div class="dossier-progress"><div style="width:' + progress + '%;background:' + sm.color + '"></div></div>' +
-          '<p class="muted-block">' + euro(c.savedAmount) + ' van ' + euro(c.targetAmount) + ' · deadline over ' + c.monthsToDeadline + ' maanden</p>' +
+          '<p class="muted-block">' + euro(c.savedAmount) + ' gespaard van ' + euro(c.targetAmount) + ' (' + progress + '%) • Deadline over ' + c.monthsToDeadline + ' maanden</p>' +
           '<div class="dossier-metrics">' +
-            '<div><small>Inkomen 3 mnd</small><strong>' + euro(c.avgIncome3m) + '</strong></div>' +
-            '<div><small>Uitgaven 3 mnd</small><strong>' + euro(c.avgExpenses3m) + '</strong></div>' +
-            '<div><small>Spaarcapaciteit</small><strong>' + euro(c.savingsCapacity) + '</strong></div>' +
-            '<div><small>Nodig / mnd</small><strong>' + euro(c.neededPerMonth) + '</strong></div>' +
+            '<div><small>Gem. Inkomen (3 mnd)</small><strong>' + euro(c.avgIncome3m) + '</strong></div>' +
+            '<div><small>Gem. Uitgaven (3 mnd)</small><strong>' + euro(c.avgExpenses3m) + '</strong></div>' +
+            '<div><small>Spaarcapaciteit</small><strong style="color:var(--kbc-blue);">' + euro(c.savingsCapacity) + ' / mnd</strong></div>' +
+            '<div><small>Nodig tot deadline</small><strong style="color:#d97706;">' + euro(c.neededPerMonth) + ' / mnd</strong></div>' +
           '</div>' +
-          '<p class="staff-hint">Ratio ' + String(c.ratio).replace(".", ",") + ' · productlink: ' + esc(c.linkedProduct) + '</p>' +
+          '<div style="margin-top:12px;padding:10px;background:' + sm.bg + ';border:1px solid ' + sm.border + ';border-radius:8px;">' +
+            '<strong style="color:' + sm.color + ';">Status: ' + sm.dot + ' ' + esc(sm.label) + ' (Ratio ' + String(c.ratio).replace(".", ",") + ')</strong>' +
+            '<p style="font-size:11px;color:#334155;margin-top:2px;">Aanbevolen KBC-productkoppeling: ' + esc(c.linkedProduct) + '</p>' +
+          '</div>' +
         '</section>' +
+
+        '<!-- Rekeningen -->' +
         '<section class="staff-card">' +
-          '<h3>Rekeningen</h3>' +
-          '<div class="account-line"><span>Zicht</span><strong>' + euro(c.checkingBalance) + '</strong><small>' + esc(c.ibanChecking) + '</small></div>' +
-          '<div class="account-line"><span>Spaar</span><strong>' + euro(c.savingsBalance) + '</strong><small>' + esc(c.ibanSavings) + '</small></div>' +
+          '<h3>🏦 Gekoppelde Rekeningen</h3>' +
+          '<div class="account-line">' +
+            '<span>Zicht</span>' +
+            '<strong>' + euro(c.checkingBalance) + '</strong>' +
+            '<small>' + esc(c.ibanChecking) + ' • KBC Plusrekening</small>' +
+          '</div>' +
+          '<div class="account-line">' +
+            '<span>Spaar</span>' +
+            '<strong style="color:var(--kbc-cyan);">' + euro(c.savingsBalance) + '</strong>' +
+            '<small>' + esc(c.ibanSavings) + ' • Doelspaarbuffer voor ' + esc(c.goalLabel) + '</small>' +
+          '</div>' +
         '</section>' +
+
+        '<!-- Gesprekstips & Risicosignalen -->' +
         '<section class="staff-card">' +
-          '<h3>Gesprekstips</h3>' +
+          '<h3>💡 Gesprekstips voor ' + esc(c.advisorName.split(" ")[0]) + '</h3>' +
           '<ul class="tip-list">' + tips.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' +
           (c.riskFlags && c.riskFlags.length
-            ? '<div class="risk-flags">' + c.riskFlags.map(function (f) { return '<span>' + esc(f) + "</span>"; }).join("") + "</div>"
+            ? '<div style="margin-top:12px;"><strong style="font-size:11px;color:#dc2626;display:block;margin-bottom:4px;">Gedetecteerde Risicosignalen:</strong><div class="risk-flags">' +
+                c.riskFlags.map(function (f) { return '<span>⚠️ ' + esc(f) + "</span>"; }).join("") +
+              '</div></div>'
             : "") +
         '</section>' +
       '</div>';
 
+    // Tab 2: 12 Maanden Cashflow Historie
     var maxInc = 1;
     (c.monthlyHistory || []).forEach(function (h) {
       if (h.income > maxInc) maxInc = h.income;
     });
+
     var monthsHtml = (c.monthlyHistory || []).map(function (h) {
       var iw = Math.round((h.income / maxInc) * 100);
       var ew = Math.round((h.expenses / maxInc) * 100);
+      var netPos = h.net >= 0;
       return (
         '<div class="month-row">' +
           '<span class="month-lab">' + esc(h.month) + '</span>' +
           '<div class="month-bars">' +
-            '<div class="mb inc" style="width:' + iw + '%"></div>' +
-            '<div class="mb exp" style="width:' + ew + '%"></div>' +
+            '<div class="mb inc" style="width:' + iw + '%;" title="Inkomen: ' + euro(h.income) + '"></div>' +
+            '<div class="mb exp" style="width:' + ew + '%;" title="Uitgaven: ' + euro(h.expenses) + '"></div>' +
           '</div>' +
-          '<span class="month-fig">' + euro(h.income) + ' / ' + euro(h.expenses) + '</span>' +
+          '<span class="month-fig">' +
+            euro(h.income) + ' / ' + euro(h.expenses) +
+            '<small class="' + (netPos ? 'amt-pos' : 'amt-neg') + '" style="display:block;font-size:10px;">Netto: ' + (netPos ? '+' : '') + euro(h.net) + '</small>' +
+          '</span>' +
         '</div>'
       );
     }).join("");
 
+    // Tab 3: Transacties
     var txHtml = (c.transactions || []).map(function (tx) {
       var neg = tx.amount < 0;
-      var amt = (neg ? "−" : "+") + euro(Math.abs(tx.amount)).replace("€", "") + " €";
+      var amt = (neg ? "- " : "+ ") + euro(Math.abs(tx.amount)).replace("€ ", "") + " €";
       return (
         '<tr>' +
-          '<td>' + esc(tx.date) + '</td>' +
-          '<td>' + esc(tx.merchant) + '<small class="muted-block">' + esc(tx.category) + '</small></td>' +
+          '<td><strong>' + esc(tx.date) + '</strong></td>' +
+          '<td>' +
+            '<strong>' + esc(tx.merchant) + '</strong>' +
+            '<span class="tx-badge">' + esc(tx.category) + '</span>' +
+          '</td>' +
           '<td class="' + (neg ? "amt-neg" : "amt-pos") + '">' + amt + '</td>' +
         '</tr>'
       );
     }).join("");
 
+    // Tab 4: Contacthistorie
     var histHtml = (c.contactHistory || []).map(function (h) {
       return (
         '<article class="timeline-item">' +
-          '<div class="timeline-when">' + esc(h.date) + '<small>' + esc(h.channel) + '</small></div>' +
-          '<div><strong>' + esc(h.advisor) + '</strong><p>' + esc(h.summary) + '</p></div>' +
+          '<div class="timeline-when">' +
+            '<strong>' + esc(h.date) + '</strong>' +
+            '<span class="channel-pill">' + esc(h.channel) + '</span>' +
+          '</div>' +
+          '<div>' +
+            '<strong>' + esc(h.advisor) + ' (' + esc(h.branch || "KBC") + ')</strong>' +
+            '<p>' + esc(h.summary) + '</p>' +
+          '</div>' +
         '</article>'
       );
     }).join("");
 
+    // Tab 5: Producten & Gaps
     var prodHtml = (c.products || []).map(function (p) {
-      return '<li><strong>' + esc(p.name) + '</strong><span>' + esc(p.status) + '</span></li>';
+      var isOk = p.status.indexOf("Actief") !== -1 || p.status.indexOf("Optimaal") !== -1;
+      var isGap = p.status.indexOf("Dekkingsgat") !== -1;
+      return (
+        '<li class="dossier-prod-row ' + (isGap ? 'prod-gap' : '') + '">' +
+          '<div style="display:flex;align-items:center;gap:10px;">' +
+            '<span style="font-size:20px;">' + esc(p.icon || "📦") + '</span>' +
+            '<div>' +
+              '<strong>' + esc(p.name) + '</strong>' +
+              '<small style="display:block;color:#64748b;font-size:11px;">' + esc(p.cost || "KBC tarief") + (p.iban ? ' • ' + esc(p.iban) : '') + '</small>' +
+            '</div>' +
+          '</div>' +
+          '<span class="prod-badge ' + (isOk ? 'ok' : (isGap ? 'gap' : 'info')) + '">' +
+            (isGap ? '⚠️ Dekkingsgat' : esc(p.status)) +
+          '</span>' +
+        '</li>'
+      );
     }).join("");
 
     var tabBody = overzicht;
     if (tab === "historie") {
-      tabBody = '<div class="staff-card"><h3>Cashflow laatste 12 maanden</h3><p class="muted-block">Bovenste balk = inkomen, onderste = uitgaven</p>' + monthsHtml + "</div>";
+      tabBody =
+        '<div class="staff-card">' +
+          '<h3>📈 Cashflow &amp; Spaarhistorie Laatste 12 Maanden</h3>' +
+          '<p class="muted-block" style="margin-bottom:14px;">Blauwe balk = Maandinkomen • Grijze balk = Totale uitgaven • Rechts: Netto overschot</p>' +
+          monthsHtml +
+        '</div>';
     } else if (tab === "transacties") {
-      tabBody = '<div class="staff-card"><h3>Recente transacties</h3><table class="staff-table compact"><thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th></tr></thead><tbody>' + txHtml + "</tbody></table></div>";
+      tabBody =
+        '<div class="staff-card">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+            '<h3>💳 Volledig Transactieoverzicht (Klant ' + esc(c.customerNumber) + ')</h3>' +
+            '<span style="font-size:12px;color:#64748b;">' + (c.transactions || []).length + ' transacties geladen</span>' +
+          '</div>' +
+          '<div class="staff-table-wrap">' +
+            '<table class="staff-table compact">' +
+              '<thead><tr><th>Datum &amp; Tijd</th><th>Omschrijving &amp; Categorie</th><th>Bedrag</th></tr></thead>' +
+              '<tbody>' + txHtml + '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
     } else if (tab === "contact") {
-      tabBody = '<div class="staff-card"><h3>Contacthistorie</h3><div class="timeline">' + histHtml + "</div><p class="staff-hint">' + esc(c.profileNote) + "</p></div>";
+      tabBody =
+        '<div class="staff-card">' +
+          '<h3>📞 Contacthistorie, Videocalls &amp; Gespreksnota\'s</h3>' +
+          '<p class="muted-block" style="margin-bottom:14px;">Alle geregistreerde interacties tussen de klant, het kantoor, Kate en adviseur ' + esc(c.advisorName) + '.</p>' +
+          '<div class="timeline">' + histHtml + '</div>' +
+          '<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;border-left:4px solid var(--kbc-blue);">' +
+            '<strong>Dossier Opmerking:</strong> ' + esc(c.profileNote) +
+          '</div>' +
+        '</div>';
     } else if (tab === "producten") {
-      tabBody = '<div class="staff-card"><h3>Producten &amp; gaps</h3><ul class="prod-list">' + prodHtml + "</ul></div>";
+      tabBody =
+        '<div class="staff-card">' +
+          '<h3>🛡️ Actieve KBC-Producten &amp; Gedetecteerde Dekkingsgaten</h3>' +
+          '<p class="muted-block" style="margin-bottom:14px;">Automatische gap-analyse op basis van het gekozen Kompas-doel (' + esc(c.goalLabel) + ').</p>' +
+          '<ul class="prod-list">' + prodHtml + '</ul>' +
+        '</div>';
     }
 
     return (
       '<div class="staff-shell">' +
-        '<button class="staff-back" data-staff-back="1">← Terug naar portefeuille</button>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+          '<button class="staff-back" data-staff-back="1">&larr; Terug naar Portefeuille (200 klanten)</button>' +
+          '<button class="staff-btn-view-as-customer" data-staff-load-persona="' + esc(c.id) + '">' +
+            '📱 Open dit profiel in de KBC Mobile Klantapp &rarr;' +
+          '</button>' +
+        '</div>' +
+
         '<header class="dossier-head">' +
           '<div class="staff-namecell lg">' +
             '<span class="staff-avatar lg">' + esc(c.initials) + '</span>' +
             '<div>' +
-              '<p class="staff-kicker">Dossier · alleen medewerker</p>' +
+              '<p class="staff-kicker">KBC PRO DOSSIER • ' + esc(c.customerNumber) + '</p>' +
               '<h2>' + esc(c.name) + '</h2>' +
-              '<p>' + c.age + ' jaar · ' + esc(c.city) + ' · ' + esc(c.occupation) + '</p>' +
+              '<p>' + c.age + ' jaar • ' + esc(c.city) + ' (' + esc(c.province) + ') • ' + esc(c.occupation) + '</p>' +
             '</div>' +
           '</div>' +
-          '<span class="staff-status staff-status-' + sm.cls + ' lg">' + esc(sm.label) + '</span>' +
+          '<div style="text-align:right;">' +
+            '<span class="staff-status staff-status-' + sm.cls + ' lg">' +
+              sm.dot + ' ' + esc(sm.label) + ' (Ratio ' + String(c.ratio).replace(".", ",") + ')' +
+            '</span>' +
+            '<small style="display:block;color:#64748b;margin-top:6px;">Kantoor: ' + esc(c.advisorBranch) + '</small>' +
+          '</div>' +
         '</header>' +
+
         '<nav class="dossier-tabs">' +
-          '<button class="' + (tab === "overzicht" ? "on" : "") + '" data-dossier-tab="overzicht">Overzicht</button>' +
-          '<button class="' + (tab === "historie" ? "on" : "") + '" data-dossier-tab="historie">12 maanden</button>' +
-          '<button class="' + (tab === "transacties" ? "on" : "") + '" data-dossier-tab="transacties">Transacties</button>' +
-          '<button class="' + (tab === "contact" ? "on" : "") + '" data-dossier-tab="contact">Contact</button>' +
-          '<button class="' + (tab === "producten" ? "on" : "") + '" data-dossier-tab="producten">Producten</button>' +
+          '<button class="' + (tab === "overzicht" ? "on" : "") + '" data-dossier-tab="overzicht">📋 Overzicht &amp; Kompas</button>' +
+          '<button class="' + (tab === "historie" ? "on" : "") + '" data-dossier-tab="historie">📈 12 Maanden Cashflow</button>' +
+          '<button class="' + (tab === "transacties" ? "on" : "") + '" data-dossier-tab="transacties">💳 Transacties (' + (c.transactions || []).length + ')</button>' +
+          '<button class="' + (tab === "contact" ? "on" : "") + '" data-dossier-tab="contact">📞 Contacthistorie (' + (c.contactHistory || []).length + ')</button>' +
+          '<button class="' + (tab === "producten" ? "on" : "") + '" data-dossier-tab="producten">🛡️ Producten &amp; Dekkingsgaten</button>' +
         '</nav>' +
+
         tabBody +
       '</div>'
     );
@@ -991,7 +1141,7 @@ window.KBCAura = window.KBCAura || {};
 
   // --- Event Handlers & Binding ---
   function bindEvents(root) {
-    // Top view switcher
+    // Top view switcher (Klantapp vs Medewerker)
     root.querySelectorAll(".view-tab-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.currentTopView = btn.getAttribute("data-view");
@@ -1002,6 +1152,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
+    // Medewerker zoekbalk
     var searchForm = root.querySelector(".staff-search-form");
     if (searchForm) {
       searchForm.addEventListener("submit", function (e) {
@@ -1013,6 +1164,16 @@ window.KBCAura = window.KBCAura || {};
       });
     }
 
+    var clearSearchBtn = root.querySelector(".staff-btn-clear");
+    if (clearSearchBtn) {
+      clearSearchBtn.addEventListener("click", function () {
+        state.staffSearch = "";
+        state.staffPage = 1;
+        renderAll();
+      });
+    }
+
+    // Status filter chips
     root.querySelectorAll("[data-staff-status]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.staffStatus = btn.getAttribute("data-staff-status");
@@ -1021,6 +1182,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
+    // Doel filter
     var goalSel = root.querySelector("[data-staff-goal]");
     if (goalSel) {
       goalSel.addEventListener("change", function () {
@@ -1029,6 +1191,8 @@ window.KBCAura = window.KBCAura || {};
         renderAll();
       });
     }
+
+    // Stad filter
     var citySel = root.querySelector("[data-staff-city]");
     if (citySel) {
       citySel.addEventListener("change", function () {
@@ -1038,6 +1202,7 @@ window.KBCAura = window.KBCAura || {};
       });
     }
 
+    // Paginering
     root.querySelectorAll("[data-staff-page]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         if (btn.disabled) return;
@@ -1047,14 +1212,19 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    root.querySelectorAll(".staff-row").forEach(function (row) {
-      row.addEventListener("click", function () {
-        state.selectedStaffCustomerId = row.getAttribute("data-staff-id");
-        state.staffDossierTab = "overzicht";
-        renderAll();
+    // Klikken op een klant in de tabel -> open dossier
+    root.querySelectorAll(".staff-row, .staff-view-btn").forEach(function (el) {
+      el.addEventListener("click", function (e) {
+        var cid = el.getAttribute("data-staff-id");
+        if (cid) {
+          state.selectedStaffCustomerId = cid;
+          state.staffDossierTab = "overzicht";
+          renderAll();
+        }
       });
     });
 
+    // Terugknop naar de 200-klanten lijst
     var backBtn = root.querySelector("[data-staff-back]");
     if (backBtn) {
       backBtn.addEventListener("click", function () {
@@ -1063,6 +1233,7 @@ window.KBCAura = window.KBCAura || {};
       });
     }
 
+    // Dossier tabs (Overzicht, 12 Maanden, Transacties, Contact, Producten)
     root.querySelectorAll("[data-dossier-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.staffDossierTab = btn.getAttribute("data-dossier-tab");
@@ -1070,7 +1241,54 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    // Persona switcher
+    // Direct dit profiel inladen in de KBC Mobile Klantapp!
+    root.querySelectorAll("[data-staff-load-persona]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var cid = btn.getAttribute("data-staff-load-persona");
+        var c = window.KBCAura.Synthetic200Customers.getById(cid);
+        if (c) {
+          // Zet om naar persona in de klantapp
+          var newCust = {
+            id: c.id,
+            name: c.name,
+            avatar: c.age < 25 ? "🎓" : (c.situation.indexOf("gezin") !== -1 ? "👨‍👩‍👧" : "💼"),
+            age: c.age,
+            city: c.city,
+            situation: c.situation,
+            avgMonthlyIncome3m: c.avgIncome3m,
+            avgMonthlyExpenses3m: c.avgExpenses3m,
+            accounts: {
+              checkingName: "KBC-Plusrekening",
+              checkingIban: c.ibanChecking,
+              checkingBalance: c.checkingBalance,
+              savingsName: "KBC-Spaarrekening (Kompas Doel)",
+              savingsIban: c.ibanSavings,
+              savingsBalance: c.savingsBalance
+            },
+            goals: [
+              {
+                id: "goal-" + c.goalType,
+                type: c.goalType,
+                title: c.goalLabel,
+                targetAmount: c.targetAmount,
+                savedAmount: c.savedAmount,
+                monthsToDeadline: c.monthsToDeadline
+              }
+            ],
+            activeGoalId: "goal-" + c.goalType,
+            transactions: c.transactions,
+            planEvents: []
+          };
+          state.customers.unshift(newCust);
+          state.activeCustomerIndex = 0;
+          state.currentTopView = "split";
+          state.activeAppTab = "kompas";
+          renderAll();
+        }
+      });
+    });
+
+    // Persona switcher in klantapp
     root.querySelectorAll(".persona-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.activeCustomerIndex = parseInt(btn.getAttribute("data-persona-idx"), 10);
@@ -1078,7 +1296,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    // App Bottom tabs
+    // Klantapp tabs onderaan (Start, Kompas, Producten, Kate, Profiel)
     root.querySelectorAll(".tab-nav-item").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.activeAppTab = btn.getAttribute("data-tab");
@@ -1086,7 +1304,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    // Header buttons
+    // Profielknop in header
     var btnGoSettings = root.querySelector(".btn-go-settings");
     if (btnGoSettings) {
       btnGoSettings.addEventListener("click", function () {
@@ -1095,7 +1313,7 @@ window.KBCAura = window.KBCAura || {};
       });
     }
 
-    // Modal triggers
+    // Modals
     root.querySelectorAll(".btn-open-steering").forEach(function (b) {
       b.addEventListener("click", function () {
         state.showSteeringModal = true;
@@ -1119,7 +1337,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    // Switch between existing goals
+    // Doel wisselen
     root.querySelectorAll(".btn-switch-goal").forEach(function (b) {
       b.addEventListener("click", function () {
         var gid = b.getAttribute("data-goal-id");
@@ -1128,7 +1346,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    // Live Event Simulator Knop geklikt!
+    // Live Event Simulator
     root.querySelectorAll(".event-btn").forEach(function (b) {
       b.addEventListener("click", function () {
         var evtId = b.getAttribute("data-event-id");
@@ -1137,7 +1355,6 @@ window.KBCAura = window.KBCAura || {};
         if (!evt) return;
 
         var cust = getActiveCustomer();
-        // Pas effect toe
         if (evt.effect.savingsDelta) {
           cust.accounts.savingsBalance = Math.max(0, cust.accounts.savingsBalance + evt.effect.savingsDelta);
           var activeG = (cust.goals || []).find(function (g) { return g.id === cust.activeGoalId; });
@@ -1166,7 +1383,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    // Bijsturen toepassing
+    // Bijsturen toepassen
     root.querySelectorAll(".btn-apply-steering").forEach(function (b) {
       b.addEventListener("click", function () {
         var optType = b.getAttribute("data-opt-type");
@@ -1188,7 +1405,7 @@ window.KBCAura = window.KBCAura || {};
       });
     });
 
-    // Onboarding wizard handlers
+    // Onboarding wizard
     root.querySelectorAll(".goal-pick-btn").forEach(function (b) {
       b.addEventListener("click", function () {
         var gt = b.getAttribute("data-goal-type");
@@ -1244,7 +1461,7 @@ window.KBCAura = window.KBCAura || {};
       });
     }
 
-    // Save profile form in Instellingen
+    // Profiel opslaan
     var btnSaveProfile = root.querySelector(".btn-save-profile");
     if (btnSaveProfile) {
       btnSaveProfile.addEventListener("click", function () {
@@ -1262,7 +1479,7 @@ window.KBCAura = window.KBCAura || {};
       });
     }
 
-    // Quick demo actions
+    // Snelle demo overschrijving
     var btnSimTransfer = root.querySelector(".btn-sim-transfer");
     if (btnSimTransfer) {
       btnSimTransfer.addEventListener("click", function () {
@@ -1286,10 +1503,8 @@ window.KBCAura = window.KBCAura || {};
     }
   }
 
-  // Initialiseer wanneer DOM geladen is
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", renderAll);
-  } else {
+  // Initialisatie bij laden
+  document.addEventListener("DOMContentLoaded", function () {
     renderAll();
-  }
+  });
 })();
