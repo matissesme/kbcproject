@@ -1,0 +1,72 @@
+id,klant_id,datum,type,bedrag,toelichting
+1,koppel,2026-06-12,inkomenswijziging,300.0,Jan krijgt opslag van 300 euro.
+2,gezinsvader,2026-04-02,nieuwe_job,0.0,"Nieuwe job, inkomen stabiel maar andere ritmes."
+3,KBC-0001,2026-06-25,verrassing_uitgave,-599.2,Onverwachte factuur.
+4,KBC-0002,2026-07-14,verrassing_uitgave,-419.49,Onverwachte factuur.
+5,KBC-0003,2026-08-06,verrassing_uitgave,-514.02,Onverwachte factuur.
+6,KBC-0005,2026-08-22,verrassing_uitgave,-520.74,Onverwachte factuur.
+7,KBC-0007,2026-06-09,verrassing_uitgave,-247.92,Onverwachte factuur.
+8,KBC-0010,2026-04-25,verrassing_uitgave,-234.84,Onverwachte factuur.
+9,KBC-0012,2026-02-04,verrassing_uitgave,-872.5,Onverwachte factuur.
+10,KBC-0017,2026-06-24,verrassing_uitgave,-667.28,Onverwachte factuur.
+11,KBC-0020,2026-02-19,nieuwe_job,349.03,Inkomenswijziging door nieuwe job.
+12,KBC-0024,2026-08-27,verrassing_uitgave,-477.49,Onverwachte factuur.
+13,KBC-0027,2026-07-22,verrassing_uitgave,-519.58,Onverwachte factuur.
+14,KBC-0028,2026-08-21,verrassing_uitgave,-641.23,Onverwachte factuur.
+15,KBC-0032,2026-04-09,verrassing_uitgave,-558.29,Onverwachte factuur.
+16,KBC-0033,2026-01-02,verrassing_uitgave,-386.51,Onverwachte factuur.
+17,KBC-0043,2026-05-27,verrassing_uitgave,-515.86,Onverwachte factuur.
+18,KBC-0046,2026-03-13,nieuwe_job,253.45,Inkomenswijziging door nieuwe job.
+19,KBC-0048,2026-07-16,verrassing_uitgave,-845.15,Onverwachte factuur.
+20,KBC-0055,2026-06-21,verrassing_uitgave,-469.66,Onverwachte factuur.
+21,KBC-0062,2026-04-12,verrassing_uitgave,-622.26,Onverwachte factuur.
+22,KBC-0065,2026-07-08,nieuwe_job,349.8,Inkomenswijziging door nieuwe job.
+23,KBC-0068,2026-06-13,verrassing_uitgave,-765.59,Onverwachte factuur.
+24,KBC-0069,2026-09-19,verrassing_uitgave,-623.77,Onverwachte factuur.
+25,KBC-0069,2026-08-28,nieuwe_job,349.57,Inkomenswijziging door nieuwe job.
+26,KBC-0071,2026-05-21,verrassing_uitgave,-579.23,Onverwachte factuur.
+27,KBC-0073,2026-09-05,verrassing_uitgave,-363.2,Onverwachte factuur.
+28,KBC-0076,2026-04-26,verrassing_uitgave,-657.07,Onverwachte factuur.
+29,KBC-0079,2026-09-22,verrassing_uitgave,-428.04,Onverwachte factuur.
+30,KBC-0079,2026-09-20,nieuwe_job,178.05,Inkomenswijziging door nieuwe job.
+31,KBC-0086,2026-06-12,verrassing_uitgave,-569.98,Onverwachte factuur.
+32,KBC-0086,2026-01-21,nieuwe_job,388.4,Inkomenswijziging door nieuwe job.
+33,KBC-0087,2026-01-05,verrassing_uitgave,-858.09,Onverwachte factuur.
+34,KBC-0089,2026-02-11,nieuwe_job,150.4,Inkomenswijziging door nieuwe job.
+35,KBC-0090,2026-09-11,verrassing_uitgave,-696.82,Onverwachte factuur.
+36,KBC-0098,2026-06-12,nieuwe_job,392.62,Inkomenswijziging door nieuwe job.
+37,KBC-0099,2026-05-06,nieuwe_job,462.97,Inkomenswijziging door nieuwe job.
+38,KBC-0101,2026-02-11,verrassing_uitgave,-757.43,Onverwachte factuur.
+39,KBC-0102,2026-09-14,verrassing_uitgave,-782.65,Onverwachte factuur.
+40,KBC-0102,2026-09-09,nieuwe_job,306.18,Inkomenswijziging door nieuwe job.
+41,KBC-0104,2026-04-25,verrassing_uitgave,-616.55,Onverwachte factuur.
+42,KBC-0105,2026-08-23,verrassing_uitgave,-413.89,Onverwachte factuur.
+43,KBC-0112,2026-09-27,verrassing_uitgave,-742.87,Onverwachte factuur.
+44,KBC-0113,2026-08-08,verrassing_uitgave,-356.03,Onverwachte factuur.
+45,KBC-0115,2026-01-14,verrassing_uitgave,-286.9,Onverwachte factuur.
+46,KBC-0116,2026-02-27,verrassing_uitgave,-799.16,Onverwachte factuur.
+47,KBC-0117,2026-03-13,verrassing_uitgave,-596.99,Onverwachte factuur.
+48,KBC-0128,2026-03-25,verrassing_uitgave,-394.75,Onverwachte factuur.
+49,KBC-0131,2026-09-28,nieuwe_job,405.39,Inkomenswijziging door nieuwe job.
+50,KBC-0135,2026-06-04,verrassing_uitgave,-298.82,Onverwachte factuur.
+51,KBC-0136,2026-06-21,nieuwe_job,230.92,Inkomenswijziging door nieuwe job.
+52,KBC-0141,2026-05-13,nieuwe_job,446.94,Inkomenswijziging door nieuwe job.
+53,KBC-0150,2026-07-01,nieuwe_job,425.26,Inkomenswijziging door nieuwe job.
+54,KBC-0151,2026-06-27,nieuwe_job,287.69,Inkomenswijziging door nieuwe job.
+55,KBC-0154,2026-08-11,nieuwe_job,156.72,Inkomenswijziging door nieuwe job.
+56,KBC-0155,2026-08-09,verrassing_uitgave,-602.8,Onverwachte factuur.
+57,KBC-0160,2026-01-02,verrassing_uitgave,-302.37,Onverwachte factuur.
+58,KBC-0161,2026-09-12,verrassing_uitgave,-347.1,Onverwachte factuur.
+59,KBC-0162,2026-02-25,verrassing_uitgave,-765.49,Onverwachte factuur.
+60,KBC-0163,2026-06-05,nieuwe_job,379.37,Inkomenswijziging door nieuwe job.
+61,KBC-0171,2026-04-02,verrassing_uitgave,-353.43,Onverwachte factuur.
+62,KBC-0173,2026-07-10,verrassing_uitgave,-686.14,Onverwachte factuur.
+63,KBC-0173,2026-01-07,nieuwe_job,185.11,Inkomenswijziging door nieuwe job.
+64,KBC-0174,2026-09-19,verrassing_uitgave,-520.11,Onverwachte factuur.
+65,KBC-0176,2026-09-02,nieuwe_job,499.8,Inkomenswijziging door nieuwe job.
+66,KBC-0182,2026-08-18,verrassing_uitgave,-559.89,Onverwachte factuur.
+67,KBC-0186,2026-02-01,verrassing_uitgave,-768.14,Onverwachte factuur.
+68,KBC-0189,2026-09-08,verrassing_uitgave,-467.46,Onverwachte factuur.
+69,KBC-0189,2026-05-04,nieuwe_job,219.32,Inkomenswijziging door nieuwe job.
+70,KBC-0190,2026-05-25,verrassing_uitgave,-767.3,Onverwachte factuur.
+71,KBC-0196,2026-09-01,verrassing_uitgave,-283.84,Onverwachte factuur.

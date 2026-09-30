@@ -1,0 +1,95 @@
+{
+  "generated_for": "KBC Kompas",
+  "note": "Synthetische doelcatalogus. Bedragen zijn demo-richtwaarden in EUR.",
+  "doelen": [
+    {
+      "type": "kot",
+      "label": "Eigen kot",
+      "omschrijving": "Waarborg, inrichting en eerste maanden kot.",
+      "kost_typisch_eur": 4500,
+      "kost_min_eur": 2500,
+      "kost_max_eur": 8000,
+      "minimale_termijn_maanden": 6,
+      "gekoppelde_producten": [
+        "spaarrekening",
+        "kotverzekering",
+        "familiale verzekering",
+        "KBC Student account"
+      ]
+    },
+    {
+      "type": "reis",
+      "label": "Reis",
+      "omschrijving": "Zomerreis of langere trip.",
+      "kost_typisch_eur": 1800,
+      "kost_min_eur": 600,
+      "kost_max_eur": 4500,
+      "minimale_termijn_maanden": 3,
+      "gekoppelde_producten": [
+        "spaarrekening",
+        "reisverzekering",
+        "kredietkaart"
+      ]
+    },
+    {
+      "type": "eerste_auto",
+      "label": "Eerste auto",
+      "omschrijving": "Aankoop of eigen inbreng voor een eerste wagen.",
+      "kost_typisch_eur": 8500,
+      "kost_min_eur": 3000,
+      "kost_max_eur": 18000,
+      "minimale_termijn_maanden": 12,
+      "gekoppelde_producten": [
+        "spaarrekening",
+        "autolening",
+        "autoverzekering",
+        "bijstandsverzekering"
+      ]
+    },
+    {
+      "type": "woning",
+      "label": "Eigen woning",
+      "omschrijving": "Eigen inbreng en kosten rond aankoop van een woning.",
+      "kost_typisch_eur": 45000,
+      "kost_min_eur": 15000,
+      "kost_max_eur": 120000,
+      "minimale_termijn_maanden": 24,
+      "gekoppelde_producten": [
+        "woonlening",
+        "brandverzekering",
+        "schuldsaldoverzekering",
+        "spaarrekening",
+        "beleggen"
+      ]
+    },
+    {
+      "type": "pensioen",
+      "label": "Pensioen",
+      "omschrijving": "Extra buffer naast wettelijk pensioen.",
+      "kost_typisch_eur": 80000,
+      "kost_min_eur": 20000,
+      "kost_max_eur": 250000,
+      "minimale_termijn_maanden": 60,
+      "gekoppelde_producten": [
+        "pensioensparen",
+        "langetermijnsparen",
+        "beleggen"
+      ]
+    },
+    {
+      "type": "gezin",
+      "label": "Gezin starten",
+      "omschrijving": "Kosten rond samenwonen, kind of groter huis.",
+      "kost_typisch_eur": 12000,
+      "kost_min_eur": 4000,
+      "kost_max_eur": 25000,
+      "minimale_termijn_maanden": 12,
+      "gekoppelde_producten": [
+        "hospitalisatieverzekering",
+        "overlijdensverzekering",
+        "spaarrekening",
+        "familiale verzekering"
+      ]
+    }
+  ]
+}

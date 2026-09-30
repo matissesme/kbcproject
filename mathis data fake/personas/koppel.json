@@ -1,0 +1,43 @@
+{
+  "klant": {
+    "id": "koppel",
+    "voornaam": "Jan",
+    "achternaam": "Peeters",
+    "leeftijd": 29,
+    "situatie": "koppel",
+    "inkomen": 4200.0,
+    "gespaard": 18500.0,
+    "stad": "Mechelen"
+  },
+  "doelen": [
+    {
+      "type": "woning",
+      "bedrag": 45000.0,
+      "deadline": "2029-06-01",
+      "gespaard": 15200.0
+    },
+    {
+      "type": "gezin",
+      "bedrag": 8000.0,
+      "deadline": "2028-03-01",
+      "gespaard": 2100.0
+    }
+  ],
+  "simulate_events": [
+    {
+      "type": "verrassing_uitgave",
+      "datum": "2026-09-30",
+      "bedrag": -2400.0,
+      "categorie": "onverwachte_uitgave",
+      "toelichting": "Autopech, factuur 2400 euro."
+    }
+  ],
+  "transactie_count": 118,
+  "partner": {
+    "id": "koppel-lotte",
+    "voornaam": "Lotte",
+    "achternaam": "Peeters",
+    "leeftijd": 28,
+    "inkomen": 2400.0
+  }
+}
