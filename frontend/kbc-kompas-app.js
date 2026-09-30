@@ -18,10 +18,10 @@ window.KBCAura = window.KBCAura || {};
 
   // Applicatie Status
   var state = {
-    currentTopView: "split", // "split", "phone_only", "adviseur", "dashboard"
+    currentTopView: "split", // "split", "phone_only" = klantapp; "medewerker" = interne portefeuille
     activeCustomerIndex: 0,
     customers: JSON.parse(JSON.stringify(window.KBCAura.PersonasDatabase || [])),
-    activeAppTab: "start", // "start", "kompas", "producten", "kate", "instellingen"
+    activeAppTab: "start",
     showSteeringModal: false,
     showOnboardingModal: false,
     onboardingStep: 1,
@@ -29,8 +29,27 @@ window.KBCAura = window.KBCAura || {};
       type: "woning",
       targetAmount: 45000,
       months: 36
-    }
+    },
+    staffSearch: "",
+    staffStatus: "ALL",
+    staffGoal: "ALL",
+    staffCity: "ALL",
+    staffPage: 1,
+    staffPageSize: 15,
+    selectedStaffCustomerId: null,
+    staffDossierTab: "overzicht"
   };
+
+  function euro(n) {
+    var v = Math.round(Number(n) || 0);
+    return "€" + v.toLocaleString("nl-BE");
+  }
+
+  function statusMeta(code) {
+    if (code === "OP_KOERS") return { label: "Op koers", color: "#10b981", bg: "#ecfdf5", cls: "ok" };
+    if (code === "BIJSTUREN") return { label: "Bijsturen", color: "#d97706", bg: "#fffbeb", cls: "warn" };
+    return { label: "Aanpassen", color: "#dc2626", bg: "#fef2f2", cls: "risk" };
+  }
 
   function getActiveCustomer() {
     return state.customers[state.activeCustomerIndex];
@@ -49,34 +68,39 @@ window.KBCAura = window.KBCAura || {};
     var cust = getActiveCustomer();
     var kompas = getKompasEvaluation();
 
+    var isStaff = state.currentTopView === "medewerker" || state.currentTopView === "adviseur" || state.currentTopView === "dashboard";
+    if (state.currentTopView === "adviseur" || state.currentTopView === "dashboard") {
+      state.currentTopView = "medewerker";
+      isStaff = true;
+    }
+
     var topNavHtml =
       '<header class="top-navbar">' +
         '<div class="brand-wrap">' +
           '<span class="kbc-logo-badge">KBC</span>' +
           '<div class="brand-text">' +
-            '<h1>KBC Kompas &amp; Mobile</h1>' +
-            '<small>Context-Adaptive Banking &amp; Living Digital Profile PoC</small>' +
+            '<h1>' + (isStaff ? "Kompas — Medewerker" : "Kompas — Klantapp") + '</h1>' +
+            '<small>' + (isStaff
+              ? "Interne portefeuille · 200 klantdossiers · niet zichtbaar voor de klant"
+              : "Wat de klant ziet in Mobile · demo-persona's") + '</small>' +
           '</div>' +
         '</div>' +
-        '<div class="top-view-tabs">' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "split" ? "active" : "") + '" data-view="split">🖥️ Split-Screen (Demo)</button>' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "phone_only" ? "active" : "") + '" data-view="phone_only">📱 Enkel KBC App</button>' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "adviseur" ? "active" : "") + '" data-view="adviseur">👔 KBC Adviseursscherm</button>' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "dashboard" ? "active" : "") + '" data-view="dashboard">🌐 200-Klanten Dashboard</button>' +
+        '<div class="role-switch">' +
+          '<button class="view-tab-btn ' + (!isStaff && state.currentTopView === "split" ? "active" : "") + '" data-view="split">📱 Klantapp (demo)</button>' +
+          '<button class="view-tab-btn ' + (state.currentTopView === "phone_only" ? "active" : "") + '" data-view="phone_only">Alleen telefoon</button>' +
+          '<button class="view-tab-btn ' + (isStaff ? "active" : "") + '" data-view="medewerker">👔 KBC-medewerker</button>' +
         '</div>' +
       '</header>';
 
-    var bodyHtml = '<div class="main-stage">';
+    var bodyHtml = '<div class="main-stage' + (isStaff ? " staff-stage" : "") + '">';
 
-    if (state.currentTopView === "split" || state.currentTopView === "phone_only") {
+    if (isStaff) {
+      bodyHtml += renderStaffWorkspace();
+    } else if (state.currentTopView === "split" || state.currentTopView === "phone_only") {
       if (state.currentTopView === "split") {
         bodyHtml += '<div class="control-sidebar">' + renderSidebar(cust, kompas) + '</div>';
       }
       bodyHtml += '<div class="phone-stage">' + renderPhone(cust, kompas) + '</div>';
-    } else if (state.currentTopView === "adviseur") {
-      bodyHtml += '<div style="width:100%;max-width:1100px;margin:0 auto;">' + renderAdviseurView(cust, kompas) + '</div>';
-    } else if (state.currentTopView === "dashboard") {
-      bodyHtml += '<div style="width:100%;max-width:1200px;margin:0 auto;">' + renderMacroDashboard() + '</div>';
     }
 
     bodyHtml += '</div>';
@@ -621,100 +645,346 @@ window.KBCAura = window.KBCAura || {};
     );
   }
 
-  // --- KBC Adviseursscherm (GET /adviseur/{klant}) ---
-  function renderAdviseurView(cust, kompas) {
+  function getStaffCustomersFiltered() {
+    var syn = (window.KBCAura.Synthetic200Customers && window.KBCAura.Synthetic200Customers.customers) || [];
+    var q = (state.staffSearch || "").trim().toLowerCase();
+    return syn.filter(function (c) {
+      if (state.staffStatus !== "ALL" && c.status !== state.staffStatus) return false;
+      if (state.staffGoal !== "ALL" && c.goalType !== state.staffGoal) return false;
+      if (state.staffCity !== "ALL" && c.city !== state.staffCity) return false;
+      if (q) {
+        var hay = (c.name + " " + c.id + " " + c.customerNumber + " " + c.city + " " + c.occupation + " " + c.email + " " + c.goalLabel).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderStaffWorkspace() {
+    var selected = state.selectedStaffCustomerId
+      ? window.KBCAura.Synthetic200Customers.getById(state.selectedStaffCustomerId)
+      : null;
+    if (selected) return renderStaffDossier(selected);
+    return renderStaffDashboard();
+  }
+
+  function renderStaffDashboard() {
+    var dash = window.KBCAura.KompasEngine.evaluateDashboard200();
+    var filtered = getStaffCustomersFiltered();
+    var totalPages = Math.max(1, Math.ceil(filtered.length / state.staffPageSize));
+    if (state.staffPage > totalPages) state.staffPage = totalPages;
+    var start = (state.staffPage - 1) * state.staffPageSize;
+    var pageRows = filtered.slice(start, start + state.staffPageSize);
+    var cities = [];
+    (dash.customers || []).forEach(function (c) {
+      if (cities.indexOf(c.city) === -1) cities.push(c.city);
+    });
+    cities.sort();
+
+    var n = dash.totalCustomers || 1;
+    var pctOk = Math.round((dash.statusCounts.OP_KOERS / n) * 100);
+    var pctWarn = Math.round((dash.statusCounts.BIJSTUREN / n) * 100);
+    var pctRisk = Math.round((dash.statusCounts.PLAN_AANPASSEN / n) * 100);
+    var goalMax = 1;
+    Object.keys(dash.goalCounts || {}).forEach(function (k) {
+      if (dash.goalCounts[k] > goalMax) goalMax = dash.goalCounts[k];
+    });
+    var goalBars = Object.keys(dash.goalCounts || {}).map(function (k) {
+      var cnt = dash.goalCounts[k] || 0;
+      var w = Math.round((cnt / goalMax) * 100);
+      return (
+        '<div class="staff-goal-row">' +
+          '<span>' + esc(k) + '</span>' +
+          '<div class="staff-goal-track"><div class="staff-goal-fill" style="width:' + w + '%"></div></div>' +
+          '<strong>' + cnt + '</strong>' +
+        '</div>'
+      );
+    }).join("");
+
+    var rowsHtml = pageRows.map(function (c) {
+      var sm = statusMeta(c.status);
+      var progress = Math.min(100, Math.round((c.savedAmount / Math.max(1, c.targetAmount)) * 100));
+      return (
+        '<tr class="staff-row" data-staff-id="' + esc(c.id) + '">' +
+          '<td>' +
+            '<div class="staff-namecell">' +
+              '<span class="staff-avatar">' + esc(c.initials) + '</span>' +
+              '<div>' +
+                '<strong>' + esc(c.name) + '</strong>' +
+                '<small>' + esc(c.customerNumber) + ' · ' + c.age + ' j</small>' +
+              '</div>' +
+            '</div>' +
+          '</td>' +
+          '<td>' + esc(c.city) + '<small class="muted-block">' + esc(c.situation) + '</small></td>' +
+          '<td>' +
+            esc(c.goalLabel) +
+            '<div class="mini-progress"><div style="width:' + progress + '%"></div></div>' +
+            '<small class="muted-block">' + euro(c.savedAmount) + ' / ' + euro(c.targetAmount) + '</small>' +
+          '</td>' +
+          '<td>' + euro(c.savingsCapacity) + '<small class="muted-block">nodig ' + euro(c.neededPerMonth) + '</small></td>' +
+          '<td>' + esc(c.advisorName.split(" ")[0]) + '<small class="muted-block">' + esc(c.lastContactAt) + '</small></td>' +
+          '<td><span class="staff-status staff-status-' + sm.cls + '">' + esc(sm.label) + ' · ' + String(c.ratio).replace(".", ",") + '</span></td>' +
+        '</tr>'
+      );
+    }).join("");
+
+    if (!rowsHtml) {
+      rowsHtml = '<tr><td colspan="6" class="staff-empty">Geen klanten voor deze filters.</td></tr>';
+    }
+
+    var cityOpts = '<option value="ALL">Alle steden</option>' + cities.map(function (city) {
+      return '<option value="' + esc(city) + '"' + (state.staffCity === city ? " selected" : "") + ">" + esc(city) + "</option>";
+    }).join("");
+
     return (
-      '<div class="card-control">' +
-        '<div class="card-control-header">' +
-          '<h2>👔 KBC Adviseurs-Cockpit (GET /adviseur/' + esc(cust.id) + ')</h2>' +
-          '<span class="pill-badge">Kantoor-perspectief</span>' +
+      '<div class="staff-shell">' +
+        '<div class="staff-banner">' +
+          '<div>' +
+            '<p class="staff-kicker">Intern · KBC-medewerker</p>' +
+            '<h2>Portefeuille Kompas</h2>' +
+            '<p>Overzicht van 200 klanten. Tik op een rij voor het volledige dossier, transacties en contacthistorie. De klant ziet dit scherm nooit.</p>' +
+          '</div>' +
+          '<div class="staff-banner-meta">' +
+            '<span>Laatste berekening: 30 sep 2026</span>' +
+            '<span>' + (dash.totalTransactions || 0).toLocaleString("nl-BE") + ' transacties (12 mnd)</span>' +
+          '</div>' +
         '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px;">' +
-          '<div style="background:#f8fafc;padding:16px;border-radius:8px;border:1px solid #e2e8f0;">' +
-            '<h3 style="font-size:14px;color:var(--kbc-blue);margin-bottom:8px;">Klantdossier: ' + esc(cust.name) + '</h3>' +
-            '<div style="font-size:12px;line-height:1.7;">' +
-              '<div>• <strong>Leeftijd &amp; Woonplaats:</strong> ' + cust.age + ' jaar, ' + esc(cust.city) + '</div>' +
-              '<div>• <strong>Gezinssituatie:</strong> ' + esc(cust.situation) + '</div>' +
-              '<div>• <strong>Spaarcapaciteit:</strong> €' + kompas.metrics.savingsCapacity + ' / maand</div>' +
-              '<div>• <strong>Actief Levensdoel:</strong> ' + esc(kompas.activeGoal.title) + '</div>' +
-              '<div>• <strong>Kompas Status:</strong> <span style="font-weight:800;color:' + esc(kompas.status.color) + ';">' + esc(kompas.status.badgeText) + '</span></div>' +
+
+        '<div class="staff-kpis">' +
+          '<article class="staff-kpi">' +
+            '<small>Klanten in portefeuille</small>' +
+            '<strong>' + dash.totalCustomers + '</strong>' +
+            '<em>Doelvolume ' + euro(dash.totalTargetVolume) + '</em>' +
+          '</article>' +
+          '<article class="staff-kpi kpi-ok">' +
+            '<small>Op koers</small>' +
+            '<strong>' + dash.statusCounts.OP_KOERS + '</strong>' +
+            '<em>' + pctOk + '% van de portefeuille</em>' +
+            '<div class="kpi-bar"><span style="width:' + pctOk + '%"></span></div>' +
+          '</article>' +
+          '<article class="staff-kpi kpi-warn">' +
+            '<small>Bijsturen</small>' +
+            '<strong>' + dash.statusCounts.BIJSTUREN + '</strong>' +
+            '<em>' + pctWarn + '% · gesprek inplannen</em>' +
+            '<div class="kpi-bar"><span style="width:' + pctWarn + '%"></span></div>' +
+          '</article>' +
+          '<article class="staff-kpi kpi-risk">' +
+            '<small>Plan aanpassen</small>' +
+            '<strong>' + dash.statusCounts.PLAN_AANPASSEN + '</strong>' +
+            '<em>' + pctRisk + '% · prioriteit kantoor</em>' +
+            '<div class="kpi-bar"><span style="width:' + pctRisk + '%"></span></div>' +
+          '</article>' +
+        '</div>' +
+
+        '<div class="staff-grid-2">' +
+          '<div class="staff-card">' +
+            '<h3>Verdeling per doeltype</h3>' +
+            goalBars +
+          '</div>' +
+          '<div class="staff-card staff-legend">' +
+            '<h3>Hoe lees je dit?</h3>' +
+            '<p>Zelfde engine als in de klantapp: spaarcapaciteit (3 maanden) versus nodig per maand tot de deadline.</p>' +
+            '<ul>' +
+              '<li><span class="dot ok"></span> Ratio ≥ 1,0 — op schema</li>' +
+              '<li><span class="dot warn"></span> 0,7–1,0 — bijsturen</li>' +
+              '<li><span class="dot risk"></span> &lt; 0,7 — plan herzien</li>' +
+            '</ul>' +
+            '<p class="staff-hint">Gespaard volume: ' + euro(dash.totalSavedVolume) + ' van ' + euro(dash.totalTargetVolume) + '</p>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="staff-card staff-table-card">' +
+          '<div class="staff-toolbar">' +
+            '<form class="staff-search-form">' +
+              '<input class="staff-search" type="search" placeholder="Zoek naam, nummer, stad, doel…" value="' + esc(state.staffSearch) + '" />' +
+              '<button type="submit" class="staff-btn-primary">Zoeken</button>' +
+            '</form>' +
+            '<div class="staff-filters">' +
+              '<button class="chip ' + (state.staffStatus === "ALL" ? "on" : "") + '" data-staff-status="ALL">Alle statussen</button>' +
+              '<button class="chip ' + (state.staffStatus === "OP_KOERS" ? "on" : "") + '" data-staff-status="OP_KOERS">Op koers</button>' +
+              '<button class="chip ' + (state.staffStatus === "BIJSTUREN" ? "on" : "") + '" data-staff-status="BIJSTUREN">Bijsturen</button>' +
+              '<button class="chip ' + (state.staffStatus === "PLAN_AANPASSEN" ? "on" : "") + '" data-staff-status="PLAN_AANPASSEN">Aanpassen</button>' +
+              '<select class="staff-select" data-staff-goal="1">' +
+                '<option value="ALL"' + (state.staffGoal === "ALL" ? " selected" : "") + '>Alle doelen</option>' +
+                '<option value="woning"' + (state.staffGoal === "woning" ? " selected" : "") + '>Woning</option>' +
+                '<option value="kot"' + (state.staffGoal === "kot" ? " selected" : "") + '>Kot</option>' +
+                '<option value="reis"' + (state.staffGoal === "reis" ? " selected" : "") + '>Reis</option>' +
+                '<option value="auto"' + (state.staffGoal === "auto" ? " selected" : "") + '>Auto</option>' +
+                '<option value="gezin"' + (state.staffGoal === "gezin" ? " selected" : "") + '>Gezin</option>' +
+                '<option value="pensioen"' + (state.staffGoal === "pensioen" ? " selected" : "") + '>Pensioen</option>' +
+              '</select>' +
+              '<select class="staff-select" data-staff-city="1">' + cityOpts + '</select>' +
             '</div>' +
           '</div>' +
-          '<div style="background:#eff6ff;padding:16px;border-radius:8px;border:1px solid #bfdbfe;">' +
-            '<h3 style="font-size:14px;color:#1e40af;margin-bottom:8px;">💡 Aanbevolen Gespreksonderwerp voor Adviseur</h3>' +
-            '<p style="font-size:12px;line-height:1.5;color:#1e3a8a;">' +
-              (kompas.status.code === "OP_KOERS"
-                ? "Klant ligt uitstekend op schema voor zijn/haar doel. Bevestig de route en controleer of de gekoppelde verzekeringen (zoals schuldsaldo of brandpolis) al klaargezet kunnen worden."
-                : "Klant heeft een tekort van €" + Math.max(10, kompas.metrics.neededPerMonth - kompas.metrics.savingsCapacity) + "/mnd. Bespreek tijdens het adviesgesprek optie 1 (deadline + " + kompas.steeringOptions[0].extraMonthsNeeded + " maanden) of help met budgetspreiding.") +
-            '</p>' +
+          '<p class="staff-count">' + filtered.length + ' resultaten · pagina ' + state.staffPage + ' / ' + totalPages + ' · tik een rij voor het dossier</p>' +
+          '<div class="staff-table-wrap">' +
+            '<table class="staff-table">' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>Klant</th><th>Locatie</th><th>Doel &amp; voortgang</th><th>Cap / nodig</th><th>Adviseur</th><th>Status</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' + rowsHtml + '</tbody>' +
+            '</table>' +
+          '</div>' +
+          '<div class="staff-pager">' +
+            '<button class="staff-page-btn" data-staff-page="-1"' + (state.staffPage <= 1 ? " disabled" : "") + '>Vorige</button>' +
+            '<button class="staff-page-btn" data-staff-page="1"' + (state.staffPage >= totalPages ? " disabled" : "") + '>Volgende</button>' +
           '</div>' +
         '</div>' +
       '</div>'
     );
   }
 
-  // --- 200-Klanten Macro Dashboard (GET /dashboard) ---
-  function renderMacroDashboard() {
-    var dash = window.KBCAura.KompasEngine.evaluateDashboard200();
+  function renderStaffDossier(c) {
+    var sm = statusMeta(c.status);
+    var progress = Math.min(100, Math.round((c.savedAmount / Math.max(1, c.targetAmount)) * 100));
+    var gap = Math.max(0, c.neededPerMonth - c.savingsCapacity);
+    var tab = state.staffDossierTab;
+    var extraMonths = c.savingsCapacity > 0
+      ? Math.max(0, Math.ceil((c.targetAmount - c.savedAmount) / c.savingsCapacity) - c.monthsToDeadline)
+      : c.monthsToDeadline;
 
-    var rowsHtml = (dash.customers || []).slice(0, 20).map(function (c) {
-      var badgeStyle = c.status === "OP_KOERS"
-        ? "background:#ecfdf5;color:#10b981;"
-        : (c.status === "BIJSTUREN" ? "background:#fffbeb;color:#f59e0b;" : "background:#fef2f2;color:#dc2626;");
+    var tips;
+    if (c.status === "OP_KOERS") {
+      tips = [
+        "Bevestig dat het doel nog klopt (bedrag en timing).",
+        "Koppel passend product: " + c.linkedProduct + ".",
+        "Vraag of er een tweede doel bij mag (buffer / verzekering)."
+      ];
+    } else if (c.status === "BIJSTUREN") {
+      tips = [
+        "Toon de drie opties: deadline +" + extraMonths + " mnd, lager bedrag, of extra sparen.",
+        "Cap is " + euro(c.savingsCapacity) + "/mnd, nodig " + euro(c.neededPerMonth) + " — gat " + euro(gap) + ".",
+        "Check recente verrassingsuitgaven in de historie."
+      ];
+    } else {
+      tips = [
+        "Plan is te strak. Stel een haalbaar bedrag of langere horizon voor.",
+        "Niet pushen op extra product tot het doel realistisch is.",
+        "Noteer consent: uitleg waarom dit voorstel op het doel gebaseerd is."
+      ];
+    }
+
+    var overzicht =
+      '<div class="dossier-grid">' +
+        '<section class="staff-card">' +
+          '<h3>Profiel</h3>' +
+          '<dl class="dossier-dl">' +
+            '<div><dt>Klantnummer</dt><dd>' + esc(c.customerNumber) + '</dd></div>' +
+            '<div><dt>Adres</dt><dd>' + esc(c.address) + '</dd></div>' +
+            '<div><dt>E-mail</dt><dd>' + esc(c.email) + '</dd></div>' +
+            '<div><dt>Telefoon</dt><dd>' + esc(c.phone) + '</dd></div>' +
+            '<div><dt>Beroep</dt><dd>' + esc(c.occupation) + '</dd></div>' +
+            '<div><dt>Gezin</dt><dd>' + esc(c.householdStatus) + '</dd></div>' +
+            '<div><dt>Klant sinds</dt><dd>' + esc(c.kbcSince) + '</dd></div>' +
+            '<div><dt>Kantoor</dt><dd>' + esc(c.advisorBranch) + ' · ' + esc(c.advisorName) + '</dd></div>' +
+          '</dl>' +
+        '</section>' +
+        '<section class="staff-card">' +
+          '<h3>Kompas</h3>' +
+          '<p class="dossier-goal">' + esc(c.goalLabel) + '</p>' +
+          '<div class="dossier-progress"><div style="width:' + progress + '%;background:' + sm.color + '"></div></div>' +
+          '<p class="muted-block">' + euro(c.savedAmount) + ' van ' + euro(c.targetAmount) + ' · deadline over ' + c.monthsToDeadline + ' maanden</p>' +
+          '<div class="dossier-metrics">' +
+            '<div><small>Inkomen 3 mnd</small><strong>' + euro(c.avgIncome3m) + '</strong></div>' +
+            '<div><small>Uitgaven 3 mnd</small><strong>' + euro(c.avgExpenses3m) + '</strong></div>' +
+            '<div><small>Spaarcapaciteit</small><strong>' + euro(c.savingsCapacity) + '</strong></div>' +
+            '<div><small>Nodig / mnd</small><strong>' + euro(c.neededPerMonth) + '</strong></div>' +
+          '</div>' +
+          '<p class="staff-hint">Ratio ' + String(c.ratio).replace(".", ",") + ' · productlink: ' + esc(c.linkedProduct) + '</p>' +
+        '</section>' +
+        '<section class="staff-card">' +
+          '<h3>Rekeningen</h3>' +
+          '<div class="account-line"><span>Zicht</span><strong>' + euro(c.checkingBalance) + '</strong><small>' + esc(c.ibanChecking) + '</small></div>' +
+          '<div class="account-line"><span>Spaar</span><strong>' + euro(c.savingsBalance) + '</strong><small>' + esc(c.ibanSavings) + '</small></div>' +
+        '</section>' +
+        '<section class="staff-card">' +
+          '<h3>Gesprekstips</h3>' +
+          '<ul class="tip-list">' + tips.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' +
+          (c.riskFlags && c.riskFlags.length
+            ? '<div class="risk-flags">' + c.riskFlags.map(function (f) { return '<span>' + esc(f) + "</span>"; }).join("") + "</div>"
+            : "") +
+        '</section>' +
+      '</div>';
+
+    var maxInc = 1;
+    (c.monthlyHistory || []).forEach(function (h) {
+      if (h.income > maxInc) maxInc = h.income;
+    });
+    var monthsHtml = (c.monthlyHistory || []).map(function (h) {
+      var iw = Math.round((h.income / maxInc) * 100);
+      var ew = Math.round((h.expenses / maxInc) * 100);
       return (
-        '<tr style="border-bottom:1px solid #f1f5f9;font-size:12px;">' +
-          '<td style="padding:8px;"><strong>' + esc(c.name) + '</strong> (' + c.age + 'j)</td>' +
-          '<td style="padding:8px;">' + esc(c.city) + '</td>' +
-          '<td style="padding:8px;">' + esc(c.goalLabel) + '</td>' +
-          '<td style="padding:8px;">€' + c.targetAmount.toLocaleString("nl-BE") + '</td>' +
-          '<td style="padding:8px;">€' + c.savingsCapacity + ' / mnd</td>' +
-          '<td style="padding:8px;"><span style="padding:2px 8px;border-radius:12px;font-weight:700;' + badgeStyle + '">' + esc(c.status) + ' (' + c.ratio + ')</span></td>' +
+        '<div class="month-row">' +
+          '<span class="month-lab">' + esc(h.month) + '</span>' +
+          '<div class="month-bars">' +
+            '<div class="mb inc" style="width:' + iw + '%"></div>' +
+            '<div class="mb exp" style="width:' + ew + '%"></div>' +
+          '</div>' +
+          '<span class="month-fig">' + euro(h.income) + ' / ' + euro(h.expenses) + '</span>' +
+        '</div>'
+      );
+    }).join("");
+
+    var txHtml = (c.transactions || []).map(function (tx) {
+      var neg = tx.amount < 0;
+      var amt = (neg ? "−" : "+") + euro(Math.abs(tx.amount)).replace("€", "") + " €";
+      return (
+        '<tr>' +
+          '<td>' + esc(tx.date) + '</td>' +
+          '<td>' + esc(tx.merchant) + '<small class="muted-block">' + esc(tx.category) + '</small></td>' +
+          '<td class="' + (neg ? "amt-neg" : "amt-pos") + '">' + amt + '</td>' +
         '</tr>'
       );
     }).join("");
 
+    var histHtml = (c.contactHistory || []).map(function (h) {
+      return (
+        '<article class="timeline-item">' +
+          '<div class="timeline-when">' + esc(h.date) + '<small>' + esc(h.channel) + '</small></div>' +
+          '<div><strong>' + esc(h.advisor) + '</strong><p>' + esc(h.summary) + '</p></div>' +
+        '</article>'
+      );
+    }).join("");
+
+    var prodHtml = (c.products || []).map(function (p) {
+      return '<li><strong>' + esc(p.name) + '</strong><span>' + esc(p.status) + '</span></li>';
+    }).join("");
+
+    var tabBody = overzicht;
+    if (tab === "historie") {
+      tabBody = '<div class="staff-card"><h3>Cashflow laatste 12 maanden</h3><p class="muted-block">Bovenste balk = inkomen, onderste = uitgaven</p>' + monthsHtml + "</div>";
+    } else if (tab === "transacties") {
+      tabBody = '<div class="staff-card"><h3>Recente transacties</h3><table class="staff-table compact"><thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th></tr></thead><tbody>' + txHtml + "</tbody></table></div>";
+    } else if (tab === "contact") {
+      tabBody = '<div class="staff-card"><h3>Contacthistorie</h3><div class="timeline">' + histHtml + "</div><p class="staff-hint">' + esc(c.profileNote) + "</p></div>";
+    } else if (tab === "producten") {
+      tabBody = '<div class="staff-card"><h3>Producten &amp; gaps</h3><ul class="prod-list">' + prodHtml + "</ul></div>";
+    }
+
     return (
-      '<div class="card-control">' +
-        '<div class="card-control-header">' +
-          '<h2>🌐 KBC Kompas Macro-Dashboard (200 Synthetische Klanten)</h2>' +
-          '<span class="pill-badge">GET /dashboard</span>' +
-        '</div>' +
-
-        '<div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:14px;margin:16px 0;">' +
-          '<div class="ticker-item" style="padding:14px;">' +
-            '<small>Totaal Geanalyseerd</small><strong style="font-size:20px;">' + dash.totalCustomers + ' klanten</strong>' +
-            '<span style="font-size:10px;color:#64748b;">(' + dash.totalTransactions.toLocaleString("nl-BE") + ' transacties)</span>' +
+      '<div class="staff-shell">' +
+        '<button class="staff-back" data-staff-back="1">← Terug naar portefeuille</button>' +
+        '<header class="dossier-head">' +
+          '<div class="staff-namecell lg">' +
+            '<span class="staff-avatar lg">' + esc(c.initials) + '</span>' +
+            '<div>' +
+              '<p class="staff-kicker">Dossier · alleen medewerker</p>' +
+              '<h2>' + esc(c.name) + '</h2>' +
+              '<p>' + c.age + ' jaar · ' + esc(c.city) + ' · ' + esc(c.occupation) + '</p>' +
+            '</div>' +
           '</div>' +
-          '<div class="ticker-item" style="padding:14px;border-top:3px solid var(--status-green);">' +
-            '<small>🟢 Op Koers</small><strong style="font-size:20px;color:var(--status-green);">' + dash.statusCounts.OP_KOERS + '</strong>' +
-            '<span style="font-size:10px;color:#64748b;">(' + Math.round((dash.statusCounts.OP_KOERS / dash.totalCustomers) * 100) + '%)</span>' +
-          '</div>' +
-          '<div class="ticker-item" style="padding:14px;border-top:3px solid var(--status-amber);">' +
-            '<small>🟠 Bijsturen</small><strong style="font-size:20px;color:var(--status-amber);">' + dash.statusCounts.BIJSTUREN + '</strong>' +
-            '<span style="font-size:10px;color:#64748b;">(' + Math.round((dash.statusCounts.BIJSTUREN / dash.totalCustomers) * 100) + '%)</span>' +
-          '</div>' +
-          '<div class="ticker-item" style="padding:14px;border-top:3px solid var(--status-red);">' +
-            '<small>🔴 Plan Aanpassen</small><strong style="font-size:20px;color:var(--status-red);">' + dash.statusCounts.PLAN_AANPASSEN + '</strong>' +
-            '<span style="font-size:10px;color:#64748b;">(' + Math.round((dash.statusCounts.PLAN_AANPASSEN / dash.totalCustomers) * 100) + '%)</span>' +
-          '</div>' +
-        '</div>' +
-
-        '<h3 style="font-size:13px;color:var(--kbc-blue);margin:16px 0 8px;">Klantendossiers Sample (Eerste 20 van 200):</h3>' +
-        '<div style="overflow-x:auto;">' +
-          '<table style="width:100%;border-collapse:collapse;text-align:left;">' +
-            '<thead style="background:#f8fafc;color:#64748b;font-size:11px;text-transform:uppercase;">' +
-              '<tr>' +
-                '<th style="padding:8px;">Klant</th>' +
-                '<th style="padding:8px;">Stad</th>' +
-                '<th style="padding:8px;">Kompas Doel</th>' +
-                '<th style="padding:8px;">Doelbedrag</th>' +
-                '<th style="padding:8px;">Spaarruimte</th>' +
-                '<th style="padding:8px;">Status &amp; Ratio</th>' +
-              '</tr>' +
-            '</thead>' +
-            '<tbody>' + rowsHtml + '</tbody>' +
-          '</table>' +
-        '</div>' +
+          '<span class="staff-status staff-status-' + sm.cls + ' lg">' + esc(sm.label) + '</span>' +
+        '</header>' +
+        '<nav class="dossier-tabs">' +
+          '<button class="' + (tab === "overzicht" ? "on" : "") + '" data-dossier-tab="overzicht">Overzicht</button>' +
+          '<button class="' + (tab === "historie" ? "on" : "") + '" data-dossier-tab="historie">12 maanden</button>' +
+          '<button class="' + (tab === "transacties" ? "on" : "") + '" data-dossier-tab="transacties">Transacties</button>' +
+          '<button class="' + (tab === "contact" ? "on" : "") + '" data-dossier-tab="contact">Contact</button>' +
+          '<button class="' + (tab === "producten" ? "on" : "") + '" data-dossier-tab="producten">Producten</button>' +
+        '</nav>' +
+        tabBody +
       '</div>'
     );
   }
@@ -725,6 +995,77 @@ window.KBCAura = window.KBCAura || {};
     root.querySelectorAll(".view-tab-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.currentTopView = btn.getAttribute("data-view");
+        if (state.currentTopView !== "medewerker") {
+          state.selectedStaffCustomerId = null;
+        }
+        renderAll();
+      });
+    });
+
+    var searchForm = root.querySelector(".staff-search-form");
+    if (searchForm) {
+      searchForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var inp = root.querySelector(".staff-search");
+        state.staffSearch = inp ? inp.value : "";
+        state.staffPage = 1;
+        renderAll();
+      });
+    }
+
+    root.querySelectorAll("[data-staff-status]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.staffStatus = btn.getAttribute("data-staff-status");
+        state.staffPage = 1;
+        renderAll();
+      });
+    });
+
+    var goalSel = root.querySelector("[data-staff-goal]");
+    if (goalSel) {
+      goalSel.addEventListener("change", function () {
+        state.staffGoal = goalSel.value;
+        state.staffPage = 1;
+        renderAll();
+      });
+    }
+    var citySel = root.querySelector("[data-staff-city]");
+    if (citySel) {
+      citySel.addEventListener("change", function () {
+        state.staffCity = citySel.value;
+        state.staffPage = 1;
+        renderAll();
+      });
+    }
+
+    root.querySelectorAll("[data-staff-page]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.disabled) return;
+        state.staffPage += parseInt(btn.getAttribute("data-staff-page"), 10);
+        if (state.staffPage < 1) state.staffPage = 1;
+        renderAll();
+      });
+    });
+
+    root.querySelectorAll(".staff-row").forEach(function (row) {
+      row.addEventListener("click", function () {
+        state.selectedStaffCustomerId = row.getAttribute("data-staff-id");
+        state.staffDossierTab = "overzicht";
+        renderAll();
+      });
+    });
+
+    var backBtn = root.querySelector("[data-staff-back]");
+    if (backBtn) {
+      backBtn.addEventListener("click", function () {
+        state.selectedStaffCustomerId = null;
+        renderAll();
+      });
+    }
+
+    root.querySelectorAll("[data-dossier-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.staffDossierTab = btn.getAttribute("data-dossier-tab");
         renderAll();
       });
     });
