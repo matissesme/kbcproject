@@ -59,9 +59,26 @@ window.KBCAura = window.KBCAura || {};
   }
 
   function statusMeta(code) {
-    if (code === "OP_KOERS") return { label: "Op koers", color: "#10b981", bg: "#ecfdf5", border: "#a7f3d0", cls: "ok", dot: "🟢" };
-    if (code === "BIJSTUREN") return { label: "Bijsturen", color: "#d97706", bg: "#fffbeb", border: "#fde68a", cls: "warn", dot: "🟠" };
-    return { label: "Aanpassen", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", cls: "risk", dot: "🔴" };
+    if (code === "OP_KOERS") return { label: "Op koers", color: "#168866", bg: "#e9f7f1", border: "#b8e5d4", cls: "ok", dot: "" };
+    if (code === "BIJSTUREN") return { label: "Bijsturen", color: "#b37b20", bg: "#fff7e8", border: "#f2d8a8", cls: "warn", dot: "" };
+    return { label: "Aanpassen", color: "#c45c5a", bg: "#fff0ee", border: "#f1c7c2", cls: "risk", dot: "" };
+  }
+
+  var proIconPaths = {
+    phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+    back: '<path d="M19 12H5m6 6-6-6 6-6"/>',
+    chart: '<path d="M3 19h18M5 16l5-5 4 2 5-7"/>',
+    wallet: '<rect x="3" y="5" width="18" height="15" rx="3"/><path d="M3 9h18m-4 5h2"/>',
+    user: '<circle cx="12" cy="8" r="3.3"/><path d="M5.5 20c.4-3.6 2.5-5.4 6.5-5.4s6.1 1.8 6.5 5.4"/>',
+    layers: '<path d="m12 2 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/>',
+    message: '<path d="M4 4h16v12H9l-5 4V4Z"/>',
+    shield: '<path d="M12 2 20 5v6c0 5-3 8-8 11-5-3-8-6-8-11V5l8-3Z"/>',
+    search: '<circle cx="10.8" cy="10.8" r="6.6"/><path d="m16 16 4.2 4.2"/>'
+  };
+  function proIcon(name, size) {
+    return '<svg class="pro-icon" width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (proIconPaths[name] || proIconPaths.grid) + '</svg>';
   }
 
   function getActiveCustomer() {
@@ -88,15 +105,15 @@ window.KBCAura = window.KBCAura || {};
         '<div class="brand-wrap">' +
           '<span class="kbc-logo-badge">KBC</span>' +
           '<div class="brand-text">' +
-            '<h1>' + (isStaff ? 'KBC Pro — Adviseursportaal Portefeuille' : 'KBC Kompas — Mobile App') + '</h1>' +
+            '<h1>' + (isStaff ? 'KBC Pro' : 'KBC Kompas') + '</h1>' +
             '<small>' + (isStaff
-              ? 'Interne KBC-omgeving • 200 actieve klantdossiers • Niet zichtbaar voor klant'
+              ? 'Portefeuille Kompas · medewerkeromgeving'
               : 'Klantinterface • KBC Mobile • Live Kompas & Stuurmechanisme') + '</small>' +
           '</div>' +
         '</div>' +
         '<div class="top-view-tabs">' +
-          '<a class="view-tab-btn" href="index.html">📱 Klantapp</a>' +
-          '<span class="view-tab-btn active">👔 KBC Medewerker Portaal (200 klanten)</span>' +
+          '<a class="view-tab-btn" href="index.html">' + proIcon("phone", 16) + ' Klantapp</a>' +
+          '<span class="view-tab-btn active">' + proIcon("grid", 16) + ' Medewerkerdashboard</span>' +
         '</div>' +
       '</header>';
 
@@ -680,16 +697,16 @@ window.KBCAura = window.KBCAura || {};
       if (dash.goalCounts[k] > goalMax) goalMax = dash.goalCounts[k];
     });
 
+    var goalLabels = { woning: "Woning", kot: "Studie & kot", reis: "Reizen", auto: "Mobiliteit", gezin: "Gezin", pensioen: "Pensioen" };
     var goalBars = Object.keys(dash.goalCounts || {}).map(function (k) {
       var cnt = dash.goalCounts[k] || 0;
       var w = Math.round((cnt / goalMax) * 100);
-      var icons = { woning: "🏡", kot: "🎓", reis: "✈️", auto: "🚗", gezin: "👶", pensioen: "🏖️" };
       return (
-        '<div class="staff-goal-row">' +
-          '<span class="staff-goal-label">' + (icons[k] || "🎯") + ' ' + esc(k.charAt(0).toUpperCase() + k.slice(1)) + '</span>' +
+        '<button class="staff-goal-row" data-goal-select="' + esc(k) + '" aria-label="Filter op ' + esc(goalLabels[k] || k) + ', ' + cnt + ' dossiers">' +
+          '<span class="staff-goal-label">' + esc(goalLabels[k] || k) + '</span>' +
           '<div class="staff-goal-track"><div class="staff-goal-fill" style="width:' + w + '%"></div></div>' +
           '<strong>' + cnt + '</strong>' +
-        '</div>'
+        '</button>'
       );
     }).join("");
 
@@ -713,7 +730,6 @@ window.KBCAura = window.KBCAura || {};
           '</td>' +
           '<td>' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
-              '<span>' + esc(c.goalIcon || "🎯") + '</span>' +
               '<strong>' + esc(c.goalLabel) + '</strong>' +
             '</div>' +
             '<div class="mini-progress"><div style="width:' + progress + '%;background:' + sm.color + '"></div></div>' +
@@ -729,7 +745,7 @@ window.KBCAura = window.KBCAura || {};
           '</td>' +
           '<td>' +
             '<span class="staff-status staff-status-' + sm.cls + '">' +
-              sm.dot + ' ' + esc(sm.label) + ' (' + String(c.ratio).replace(".", ",") + ')' +
+              esc(sm.label) + ' · ' + String(c.ratio).replace(".", ",") +
             '</span>' +
           '</td>' +
           '<td style="text-align:right;">' +
@@ -749,94 +765,61 @@ window.KBCAura = window.KBCAura || {};
 
     return (
       '<div class="staff-shell">' +
-        '<!-- Medewerker Banner -->' +
         '<div class="staff-banner">' +
           '<div>' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
-              '<span class="staff-kicker">KBC PRO • INTERNE MEDEWERKER INTERFACE</span>' +
-              '<span style="background:rgba(255,255,255,0.18);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;">Niet zichtbaar voor de klant</span>' +
-            '</div>' +
-            '<h2>Portefeuille Kompas Overzicht (200 Klanten)</h2>' +
-            '<p>Live analyse over 200 Belgische cliënten dossiers. Tik op een willekeurige klant voor het diepgaande profiel, 12-maands cashflow, transactiehistorie en adviestips.</p>' +
+            '<span class="staff-kicker">PORTEFEUILLE / KOMPAS</span>' +
+            '<h2>Goed overzicht. Gerichte aandacht.</h2>' +
+            '<p>Inzicht in de voortgang en financiële ruimte van ' + dash.totalCustomers + ' klantdossiers.</p>' +
           '</div>' +
           '<div class="staff-banner-meta">' +
-            '<span>Peildatum: 30 september 2026</span>' +
-            '<span>14.400 gesimuleerde transacties (12 mnd)</span>' +
-            '<span>Engine: KBC Kompas v1.4.2</span>' +
+            '<span>Fictieve demodata</span>' +
+            '<strong>30 sep 2026</strong>' +
           '</div>' +
         '</div>' +
 
-        '<!-- KPI Kaarten -->' +
-        '<div class="staff-kpis">' +
-          '<article class="staff-kpi">' +
-            '<small>Totaal in portefeuille</small>' +
-            '<strong>' + dash.totalCustomers + ' dossiers</strong>' +
-            '<em>Doelvolume: ' + euro(dash.totalTargetVolume) + '</em>' +
-            '<div class="kpi-bar"><span style="width:100%;background:#003665;"></span></div>' +
-          '</article>' +
-          '<article class="staff-kpi kpi-ok">' +
-            '<small>🟢 Op koers (Ratio &ge; 1,0)</small>' +
-            '<strong>' + dash.statusCounts.OP_KOERS + ' klanten</strong>' +
-            '<em>' + pctOk + '% van de portefeuille</em>' +
-            '<div class="kpi-bar"><span style="width:' + pctOk + '%"></span></div>' +
-          '</article>' +
-          '<article class="staff-kpi kpi-warn">' +
-            '<small>🟠 Bijsturen (0,70 &le; Ratio &lt; 1,0)</small>' +
-            '<strong>' + dash.statusCounts.BIJSTUREN + ' klanten</strong>' +
-            '<em>' + pctWarn + '% • adviesgesprek inplannen</em>' +
-            '<div class="kpi-bar"><span style="width:' + pctWarn + '%"></span></div>' +
-          '</article>' +
-          '<article class="staff-kpi kpi-risk">' +
-            '<small>🔴 Plan Aanpassen (Ratio &lt; 0,70)</small>' +
-            '<strong>' + dash.statusCounts.PLAN_AANPASSEN + ' klanten</strong>' +
-            '<em>' + pctRisk + '% • prioriteit kantoorinterventie</em>' +
-            '<div class="kpi-bar"><span style="width:' + pctRisk + '%"></span></div>' +
-          '</article>' +
-        '</div>' +
-
-        '<!-- Grafieken & Legende -->' +
-        '<div class="staff-grid-2">' +
-          '<div class="staff-card">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-              '<h3>Verdeling per doeltype (200 dossiers)</h3>' +
-              '<small style="color:#64748b;">Gespaard: ' + euro(dash.totalSavedVolume) + '</small>' +
+        '<section class="portfolio-overview" aria-label="Visueel portefeuilleoverzicht">' +
+          '<div class="portfolio-numbers">' +
+            '<span class="staff-kicker">ACTIEVE DOSSIERS</span>' +
+            '<strong class="portfolio-total">' + dash.totalCustomers + '</strong>' +
+            '<span class="portfolio-number-label">klanten in Kompas</span>' +
+            '<div class="portfolio-volumes"><div><small>Doelvolume</small><strong>' + euro(dash.totalTargetVolume) + '</strong></div><div><small>Reeds opgebouwd</small><strong>' + euro(dash.totalSavedVolume) + '</strong></div></div>' +
+          '</div>' +
+          '<div class="portfolio-status">' +
+            '<div class="panel-heading"><div><span class="staff-kicker">KOERS VAN DE PORTEFEUILLE</span><h3>Waar is aandacht nodig?</h3></div><small>Ratio spaarcapaciteit / benodigde inleg</small></div>' +
+            '<div class="status-visual"><div class="status-donut" role="img" aria-label="' + pctOk + '% op koers, ' + pctWarn + '% bijsturen, ' + pctRisk + '% aanpassen" style="background:conic-gradient(#199779 0 ' + (dash.statusCounts.OP_KOERS / n * 100).toFixed(2) + '%,#dbaa52 ' + (dash.statusCounts.OP_KOERS / n * 100).toFixed(2) + '% ' + ((dash.statusCounts.OP_KOERS + dash.statusCounts.BIJSTUREN) / n * 100).toFixed(2) + '%,#cd706b ' + ((dash.statusCounts.OP_KOERS + dash.statusCounts.BIJSTUREN) / n * 100).toFixed(2) + '% 100%)"><div><strong>' + pctOk + '%</strong><small>op koers</small></div></div>' +
+              '<div class="status-breakdown">' +
+                '<button data-staff-status="OP_KOERS"><span class="status-mark ok"></span><span>Op koers</span><strong>' + dash.statusCounts.OP_KOERS + '</strong><small>' + pctOk + '%</small></button>' +
+                '<button data-staff-status="BIJSTUREN"><span class="status-mark warn"></span><span>Bijsturen</span><strong>' + dash.statusCounts.BIJSTUREN + '</strong><small>' + pctWarn + '%</small></button>' +
+                '<button data-staff-status="PLAN_AANPASSEN"><span class="status-mark risk"></span><span>Aanpassen</span><strong>' + dash.statusCounts.PLAN_AANPASSEN + '</strong><small>' + pctRisk + '%</small></button>' +
+              '</div>' +
             '</div>' +
-            goalBars +
           '</div>' +
-          '<div class="staff-card staff-legend">' +
-            '<h3>Wat betekent dit voor de KBC-adviseur?</h3>' +
-            '<p>De Kompas-engine berekent automatisch per klant de verhouding tussen <strong>reële spaarcapaciteit</strong> (laatste 3 maanden) en <strong>nodig per maand</strong> tot de gekozen deadline.</p>' +
-            '<ul>' +
-              '<li><span class="dot ok"></span> <strong>Op Koers (&ge; 1,00):</strong> Doel is gezond haalbaar. Koppel beschermings- of verzekeringsproducten (bv. woonpolis, reisverzekering).</li>' +
-              '<li><span class="dot warn"></span> <strong>Bijsturen (0,70 - 0,99):</strong> Kleine buffer-gap. Reik de 3 bijstuurknoppen aan (deadline uitstellen, bedrag verlagen of uitgaven optimaliseren).</li>' +
-              '<li><span class="dot risk"></span> <strong>Aanpassen (&lt; 0,70):</strong> Financieel te zwaar. Klant raakt ontmoedigd. Adviseur stelt een realistischer tijdschema voor.</li>' +
-            '</ul>' +
-          '</div>' +
-        '</div>' +
+        '</section>' +
+        '<section class="goals-panel"><div class="panel-heading"><div><span class="staff-kicker">DOELEN</span><h3>Waar werken klanten naartoe?</h3></div><small>Klik op een doel om de dossiers te filteren</small></div><div class="goals-chart">' + goalBars + '</div></section>' +
 
-        '<!-- Toolbar & 200-Klanten Tabel -->' +
         '<div class="staff-card staff-table-card">' +
+          '<div class="panel-heading table-heading"><div><span class="staff-kicker">DOSSIERS</span><h3>Klantoverzicht</h3></div><small>Selecteer een rij voor het volledige dossier</small></div>' +
           '<div class="staff-toolbar">' +
             '<form class="staff-search-form">' +
-              '<input class="staff-search" type="search" placeholder="🔍 Zoek op naam, klantnummer, beroep, gemeente of adviseur..." value="' + esc(state.staffSearch) + '" />' +
+              '<label class="staff-search-wrap">' + proIcon("search", 18) + '<input class="staff-search" type="search" aria-label="Zoek dossiers" placeholder="Zoek naam, klantnummer, gemeente of adviseur" value="' + esc(state.staffSearch) + '" /></label>' +
               '<button type="submit" class="staff-btn-primary">Zoeken</button>' +
               (state.staffSearch ? '<button type="button" class="staff-btn-clear">Wis</button>' : '') +
             '</form>' +
             '<div class="staff-filters">' +
               '<span style="font-size:12px;font-weight:700;color:#64748b;margin-right:4px;">Status:</span>' +
               '<button class="chip ' + (state.staffStatus === "ALL" ? "on" : "") + '" data-staff-status="ALL">Alle (' + dash.totalCustomers + ')</button>' +
-              '<button class="chip ' + (state.staffStatus === "OP_KOERS" ? "on" : "") + '" data-staff-status="OP_KOERS">🟢 Op koers (' + dash.statusCounts.OP_KOERS + ')</button>' +
-              '<button class="chip ' + (state.staffStatus === "BIJSTUREN" ? "on" : "") + '" data-staff-status="BIJSTUREN">🟠 Bijsturen (' + dash.statusCounts.BIJSTUREN + ')</button>' +
-              '<button class="chip ' + (state.staffStatus === "PLAN_AANPASSEN" ? "on" : "") + '" data-staff-status="PLAN_AANPASSEN">🔴 Aanpassen (' + dash.statusCounts.PLAN_AANPASSEN + ')</button>' +
+              '<button class="chip ' + (state.staffStatus === "OP_KOERS" ? "on" : "") + '" data-staff-status="OP_KOERS"><span class="status-mark ok"></span>Op koers (' + dash.statusCounts.OP_KOERS + ')</button>' +
+              '<button class="chip ' + (state.staffStatus === "BIJSTUREN" ? "on" : "") + '" data-staff-status="BIJSTUREN"><span class="status-mark warn"></span>Bijsturen (' + dash.statusCounts.BIJSTUREN + ')</button>' +
+              '<button class="chip ' + (state.staffStatus === "PLAN_AANPASSEN" ? "on" : "") + '" data-staff-status="PLAN_AANPASSEN"><span class="status-mark risk"></span>Aanpassen (' + dash.statusCounts.PLAN_AANPASSEN + ')</button>' +
               '<span style="font-size:12px;font-weight:700;color:#64748b;margin-left:8px;margin-right:4px;">Doel:</span>' +
               '<select class="staff-select" data-staff-goal="1">' +
                 '<option value="ALL"' + (state.staffGoal === "ALL" ? " selected" : "") + '>Alle doelen</option>' +
-                '<option value="woning"' + (state.staffGoal === "woning" ? " selected" : "") + '>🏡 Woning</option>' +
-                '<option value="kot"' + (state.staffGoal === "kot" ? " selected" : "") + '>🎓 Kot</option>' +
-                '<option value="reis"' + (state.staffGoal === "reis" ? " selected" : "") + '>✈️ Grote reis</option>' +
-                '<option value="auto"' + (state.staffGoal === "auto" ? " selected" : "") + '>🚗 Eerste auto</option>' +
-                '<option value="gezin"' + (state.staffGoal === "gezin" ? " selected" : "") + '>👶 Gezin</option>' +
-                '<option value="pensioen"' + (state.staffGoal === "pensioen" ? " selected" : "") + '>🏖️ Pensioen</option>' +
+                '<option value="woning"' + (state.staffGoal === "woning" ? " selected" : "") + '>Woning</option>' +
+                '<option value="kot"' + (state.staffGoal === "kot" ? " selected" : "") + '>Studie &amp; kot</option>' +
+                '<option value="reis"' + (state.staffGoal === "reis" ? " selected" : "") + '>Reizen</option>' +
+                '<option value="auto"' + (state.staffGoal === "auto" ? " selected" : "") + '>Mobiliteit</option>' +
+                '<option value="gezin"' + (state.staffGoal === "gezin" ? " selected" : "") + '>Gezin</option>' +
+                '<option value="pensioen"' + (state.staffGoal === "pensioen" ? " selected" : "") + '>Pensioen</option>' +
               '</select>' +
               '<span style="font-size:12px;font-weight:700;color:#64748b;margin-left:8px;margin-right:4px;">Regio:</span>' +
               '<select class="staff-select" data-staff-city="1">' + cityOpts + '</select>' +
@@ -914,10 +897,18 @@ window.KBCAura = window.KBCAura || {};
 
     // Tab 1: Overzicht
     var overzicht =
+      '<section class="dossier-hero">' +
+        '<div class="dossier-hero-main"><span class="staff-kicker">ACTIEF KOMPASDOEL</span><h3>' + esc(c.goalLabel) + '</h3><p>' + euro(c.savedAmount) + ' van ' + euro(c.targetAmount) + ' opgebouwd · ' + c.monthsToDeadline + ' maanden tot de deadline</p>' +
+          '<div class="dossier-progress"><div style="width:' + progress + '%"></div></div>' +
+          '<div class="dossier-hero-figures"><div><small>Maandinkomen</small><strong>' + euro(c.avgIncome3m) + '</strong></div><div><small>Maanduitgaven</small><strong>' + euro(c.avgExpenses3m) + '</strong></div><div><small>Spaarcapaciteit</small><strong>' + euro(c.savingsCapacity) + '</strong></div><div><small>Nodig per maand</small><strong>' + euro(c.neededPerMonth) + '</strong></div></div>' +
+          '<p class="dossier-recommendation">Aanbevolen productkoppeling: <strong>' + esc(c.linkedProduct) + '</strong></p>' +
+        '</div>' +
+        '<div class="dossier-hero-ring" style="--progress:' + progress + '%"><div><strong>' + progress + '%</strong><span>voortgang</span></div></div>' +
+      '</section>' +
       '<div class="dossier-grid">' +
         '<!-- Profielgegevens -->' +
         '<section class="staff-card">' +
-          '<h3>👤 Klantidentiteit &amp; Gezin</h3>' +
+          '<h3>' + proIcon("user", 19) + ' Klant &amp; gezin</h3>' +
           '<dl class="dossier-dl">' +
             '<div><dt>Klantnummer</dt><dd><strong>' + esc(c.customerNumber) + '</strong></dd></div>' +
             '<div><dt>Adres</dt><dd>' + esc(c.address) + '</dd></div>' +
@@ -930,27 +921,9 @@ window.KBCAura = window.KBCAura || {};
           '</dl>' +
         '</section>' +
 
-        '<!-- Kompas Doelstatus -->' +
-        '<section class="staff-card">' +
-          '<h3>🧭 Kompas Koers &amp; Rekencijfers</h3>' +
-          '<p class="dossier-goal">' + esc(c.goalIcon || "🎯") + ' ' + esc(c.goalLabel) + '</p>' +
-          '<div class="dossier-progress"><div style="width:' + progress + '%;background:' + sm.color + '"></div></div>' +
-          '<p class="muted-block">' + euro(c.savedAmount) + ' gespaard van ' + euro(c.targetAmount) + ' (' + progress + '%) • Deadline over ' + c.monthsToDeadline + ' maanden</p>' +
-          '<div class="dossier-metrics">' +
-            '<div><small>Gem. Inkomen (3 mnd)</small><strong>' + euro(c.avgIncome3m) + '</strong></div>' +
-            '<div><small>Gem. Uitgaven (3 mnd)</small><strong>' + euro(c.avgExpenses3m) + '</strong></div>' +
-            '<div><small>Spaarcapaciteit</small><strong style="color:var(--kbc-blue);">' + euro(c.savingsCapacity) + ' / mnd</strong></div>' +
-            '<div><small>Nodig tot deadline</small><strong style="color:#d97706;">' + euro(c.neededPerMonth) + ' / mnd</strong></div>' +
-          '</div>' +
-          '<div style="margin-top:12px;padding:10px;background:' + sm.bg + ';border:1px solid ' + sm.border + ';border-radius:8px;">' +
-            '<strong style="color:' + sm.color + ';">Status: ' + sm.dot + ' ' + esc(sm.label) + ' (Ratio ' + String(c.ratio).replace(".", ",") + ')</strong>' +
-            '<p style="font-size:11px;color:#334155;margin-top:2px;">Aanbevolen KBC-productkoppeling: ' + esc(c.linkedProduct) + '</p>' +
-          '</div>' +
-        '</section>' +
-
         '<!-- Rekeningen -->' +
         '<section class="staff-card">' +
-          '<h3>🏦 Gekoppelde Rekeningen</h3>' +
+          '<h3>' + proIcon("wallet", 19) + ' Gekoppelde rekeningen</h3>' +
           '<div class="account-line">' +
             '<span>Zicht</span>' +
             '<strong>' + euro(c.checkingBalance) + '</strong>' +
@@ -965,11 +938,11 @@ window.KBCAura = window.KBCAura || {};
 
         '<!-- Gesprekstips & Risicosignalen -->' +
         '<section class="staff-card">' +
-          '<h3>💡 Gesprekstips voor ' + esc(c.advisorName.split(" ")[0]) + '</h3>' +
+          '<h3>' + proIcon("message", 19) + ' Gesprekspunten voor ' + esc(c.advisorName.split(" ")[0]) + '</h3>' +
           '<ul class="tip-list">' + tips.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + '</ul>' +
           (c.riskFlags && c.riskFlags.length
             ? '<div style="margin-top:12px;"><strong style="font-size:11px;color:#dc2626;display:block;margin-bottom:4px;">Gedetecteerde Risicosignalen:</strong><div class="risk-flags">' +
-                c.riskFlags.map(function (f) { return '<span>⚠️ ' + esc(f) + "</span>"; }).join("") +
+                c.riskFlags.map(function (f) { return '<span>' + esc(f) + "</span>"; }).join("") +
               '</div></div>'
             : "") +
         '</section>' +
@@ -979,7 +952,20 @@ window.KBCAura = window.KBCAura || {};
     var maxInc = 1;
     (c.monthlyHistory || []).forEach(function (h) {
       if (h.income > maxInc) maxInc = h.income;
+      if (h.expenses > maxInc) maxInc = h.expenses;
     });
+
+    var chartBars = (c.monthlyHistory || []).map(function (h, i) {
+      var x = 42 + i * 68;
+      var ih = Math.round((h.income / maxInc) * 172);
+      var eh = Math.round((h.expenses / maxInc) * 172);
+      return '<g><title>' + esc(h.month) + ': inkomen ' + euro(h.income) + ', uitgaven ' + euro(h.expenses) + ', netto ' + euro(h.net) + '</title>' +
+        '<rect class="cashflow-income" x="' + x + '" y="' + (212 - ih) + '" width="17" height="' + ih + '" rx="4"/>' +
+        '<rect class="cashflow-expense" x="' + (x + 21) + '" y="' + (212 - eh) + '" width="17" height="' + eh + '" rx="4"/>' +
+        '<text x="' + (x + 18) + '" y="241" text-anchor="middle">' + esc(h.month) + '</text></g>';
+    }).join("");
+    var chartHtml = '<div class="cashflow-chart"><svg viewBox="0 0 900 260" role="img" aria-label="Inkomsten en uitgaven per maand over twaalf maanden">' +
+      '<line x1="28" y1="212" x2="864" y2="212"/><line class="gridline" x1="28" y1="126" x2="864" y2="126"/><line class="gridline" x1="28" y1="40" x2="864" y2="40"/>' + chartBars + '</svg></div>';
 
     var monthsHtml = (c.monthlyHistory || []).map(function (h) {
       var iw = Math.round((h.income / maxInc) * 100);
@@ -1039,14 +1025,14 @@ window.KBCAura = window.KBCAura || {};
       return (
         '<li class="dossier-prod-row ' + (isGap ? 'prod-gap' : '') + '">' +
           '<div style="display:flex;align-items:center;gap:10px;">' +
-            '<span style="font-size:20px;">' + esc(p.icon || "📦") + '</span>' +
+            '<span class="product-icon">' + proIcon(isGap ? "shield" : "layers", 19) + '</span>' +
             '<div>' +
               '<strong>' + esc(p.name) + '</strong>' +
               '<small style="display:block;color:#64748b;font-size:11px;">' + esc(p.cost || "KBC tarief") + (p.iban ? ' • ' + esc(p.iban) : '') + '</small>' +
             '</div>' +
           '</div>' +
           '<span class="prod-badge ' + (isOk ? 'ok' : (isGap ? 'gap' : 'info')) + '">' +
-            (isGap ? '⚠️ Dekkingsgat' : esc(p.status)) +
+            (isGap ? 'Dekkingsgat' : esc(p.status)) +
           '</span>' +
         '</li>'
       );
@@ -1056,15 +1042,16 @@ window.KBCAura = window.KBCAura || {};
     if (tab === "historie") {
       tabBody =
         '<div class="staff-card">' +
-          '<h3>📈 Cashflow &amp; Spaarhistorie Laatste 12 Maanden</h3>' +
-          '<p class="muted-block" style="margin-bottom:14px;">Blauwe balk = Maandinkomen • Grijze balk = Totale uitgaven • Rechts: Netto overschot</p>' +
-          monthsHtml +
+          '<h3>' + proIcon("chart", 19) + ' Cashflow over 12 maanden</h3>' +
+          '<div class="cashflow-legend"><span><i class="income"></i> Inkomen</span><span><i class="expense"></i> Uitgaven</span></div>' +
+          chartHtml +
+          '<details class="cashflow-details"><summary>Maandbedragen en netto resultaat bekijken</summary>' + monthsHtml + '</details>' +
         '</div>';
     } else if (tab === "transacties") {
       tabBody =
         '<div class="staff-card">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-            '<h3>💳 Volledig Transactieoverzicht (Klant ' + esc(c.customerNumber) + ')</h3>' +
+            '<h3>' + proIcon("wallet", 19) + ' Transacties · ' + esc(c.customerNumber) + '</h3>' +
             '<span style="font-size:12px;color:#64748b;">' + (c.transactions || []).length + ' transacties geladen</span>' +
           '</div>' +
           '<div class="staff-table-wrap">' +
@@ -1077,7 +1064,7 @@ window.KBCAura = window.KBCAura || {};
     } else if (tab === "contact") {
       tabBody =
         '<div class="staff-card">' +
-          '<h3>📞 Contacthistorie, Videocalls &amp; Gespreksnota\'s</h3>' +
+          '<h3>' + proIcon("message", 19) + ' Contacthistorie &amp; gespreksnota\'s</h3>' +
           '<p class="muted-block" style="margin-bottom:14px;">Alle geregistreerde interacties tussen de klant, het kantoor, Kate en adviseur ' + esc(c.advisorName) + '.</p>' +
           '<div class="timeline">' + histHtml + '</div>' +
           '<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;border-left:4px solid var(--kbc-blue);">' +
@@ -1087,7 +1074,7 @@ window.KBCAura = window.KBCAura || {};
     } else if (tab === "producten") {
       tabBody =
         '<div class="staff-card">' +
-          '<h3>🛡️ Actieve KBC-Producten &amp; Gedetecteerde Dekkingsgaten</h3>' +
+          '<h3>' + proIcon("shield", 19) + ' Producten &amp; dekkingsgaten</h3>' +
           '<p class="muted-block" style="margin-bottom:14px;">Automatische gap-analyse op basis van het gekozen Kompas-doel (' + esc(c.goalLabel) + ').</p>' +
           '<ul class="prod-list">' + prodHtml + '</ul>' +
         '</div>';
@@ -1095,10 +1082,10 @@ window.KBCAura = window.KBCAura || {};
 
     return (
       '<div class="staff-shell">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
-          '<button class="staff-back" data-staff-back="1">&larr; Terug naar Portefeuille (200 klanten)</button>' +
+        '<div class="dossier-actions">' +
+          '<button class="staff-back" data-staff-back="1">' + proIcon("back", 17) + ' Terug naar portefeuille</button>' +
           '<button class="staff-btn-view-as-customer" data-staff-load-persona="' + esc(c.id) + '">' +
-            '📱 Open dit profiel in de KBC Mobile Klantapp &rarr;' +
+            proIcon("phone", 17) + ' Bekijk in klantapp ' + proIcon("arrow", 16) +
           '</button>' +
         '</div>' +
 
@@ -1113,18 +1100,18 @@ window.KBCAura = window.KBCAura || {};
           '</div>' +
           '<div style="text-align:right;">' +
             '<span class="staff-status staff-status-' + sm.cls + ' lg">' +
-              sm.dot + ' ' + esc(sm.label) + ' (Ratio ' + String(c.ratio).replace(".", ",") + ')' +
+              esc(sm.label) + ' · ratio ' + String(c.ratio).replace(".", ",") +
             '</span>' +
             '<small style="display:block;color:#64748b;margin-top:6px;">Kantoor: ' + esc(c.advisorBranch) + '</small>' +
           '</div>' +
         '</header>' +
 
         '<nav class="dossier-tabs">' +
-          '<button class="' + (tab === "overzicht" ? "on" : "") + '" data-dossier-tab="overzicht">📋 Overzicht &amp; Kompas</button>' +
-          '<button class="' + (tab === "historie" ? "on" : "") + '" data-dossier-tab="historie">📈 12 Maanden Cashflow</button>' +
-          '<button class="' + (tab === "transacties" ? "on" : "") + '" data-dossier-tab="transacties">💳 Transacties (' + (c.transactions || []).length + ')</button>' +
-          '<button class="' + (tab === "contact" ? "on" : "") + '" data-dossier-tab="contact">📞 Contacthistorie (' + (c.contactHistory || []).length + ')</button>' +
-          '<button class="' + (tab === "producten" ? "on" : "") + '" data-dossier-tab="producten">🛡️ Producten &amp; Dekkingsgaten</button>' +
+          '<button class="' + (tab === "overzicht" ? "on" : "") + '" data-dossier-tab="overzicht">' + proIcon("grid", 16) + ' Overzicht</button>' +
+          '<button class="' + (tab === "historie" ? "on" : "") + '" data-dossier-tab="historie">' + proIcon("chart", 16) + ' Cashflow</button>' +
+          '<button class="' + (tab === "transacties" ? "on" : "") + '" data-dossier-tab="transacties">' + proIcon("wallet", 16) + ' Transacties <span class="tab-count">' + (c.transactions || []).length + '</span></button>' +
+          '<button class="' + (tab === "contact" ? "on" : "") + '" data-dossier-tab="contact">' + proIcon("message", 16) + ' Contact <span class="tab-count">' + (c.contactHistory || []).length + '</span></button>' +
+          '<button class="' + (tab === "producten" ? "on" : "") + '" data-dossier-tab="producten">' + proIcon("shield", 16) + ' Producten</button>' +
         '</nav>' +
 
         tabBody +
@@ -1170,6 +1157,14 @@ window.KBCAura = window.KBCAura || {};
     root.querySelectorAll("[data-staff-status]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.staffStatus = btn.getAttribute("data-staff-status");
+        state.staffPage = 1;
+        renderAll();
+      });
+    });
+
+    root.querySelectorAll("[data-goal-select]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.staffGoal = btn.getAttribute("data-goal-select");
         state.staffPage = 1;
         renderAll();
       });
