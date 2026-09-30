@@ -1,0 +1,17 @@
+# Geheime API sleutels (NOOIT naar GitHub pushen - Aikido Security!)
+.env
+.env.local
+.env.*.local
+
+# Dependencies & Build folders
+node_modules/
+dist/
+build/
+.next/
+
+# OS & Editor bestanden
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
