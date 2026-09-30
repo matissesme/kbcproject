@@ -8,12 +8,14 @@ Implementeert de 5 endpoints van Jasper:
   5. GET  /dashboard         -> Macro-dashboard over alle ~200 klanten
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import sqlite3
 import os
+import secrets
+import hashlib
 
 app = FastAPI(title="KBC Kompas Engine API", version="1.0.0")
 
@@ -82,6 +84,16 @@ def init_db():
             FOREIGN KEY (klant_id) REFERENCES klant (id)
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS api_user (
+            id TEXT PRIMARY KEY,
+            api_key_hash TEXT NOT NULL UNIQUE,
+            role TEXT NOT NULL,
+            klant_id TEXT,
+            naam TEXT NOT NULL,
+            FOREIGN KEY (klant_id) REFERENCES klant (id)
+        )
+    """)
 
     # Seed demo klanten indien leeg
     c.execute("SELECT COUNT(*) FROM klant")
@@ -95,10 +107,105 @@ def init_db():
         c.execute("INSERT INTO klant VALUES ('klant-thomas-03', 'Thomas Vandenberghe', 37, 'Antwerpen', 'Gezinsvader', 4750.0, 4470.0, 4100.0)")
         c.execute("INSERT INTO doel VALUES ('goal-thomas-gezin', 'klant-thomas-03', 'gezin', 'Gezinsuitbreiding & Babybuffer', 6500.0, 4100.0, 7)")
 
+    # Seed demo API users with keys (for testing - in production, use secure key generation and distribution)
+    c.execute("SELECT COUNT(*) FROM api_user")
+    if c.fetchone()[0] == 0:
+        # Customer users - can only access their own data
+        lisa_key = "lisa-demo-key-12345"
+        lisa_hash = hashlib.sha256(lisa_key.encode()).hexdigest()
+        c.execute("INSERT INTO api_user VALUES ('user-lisa', ?, 'customer', 'klant-lisa-01', 'Lisa Peeters')", (lisa_hash,))
+        
+        koppel_key = "koppel-demo-key-67890"
+        koppel_hash = hashlib.sha256(koppel_key.encode()).hexdigest()
+        c.execute("INSERT INTO api_user VALUES ('user-koppel', ?, 'customer', 'klant-koppel-02', 'Lukas & Emma Vermeulen')", (koppel_hash,))
+        
+        thomas_key = "thomas-demo-key-11111"
+        thomas_hash = hashlib.sha256(thomas_key.encode()).hexdigest()
+        c.execute("INSERT INTO api_user VALUES ('user-thomas', ?, 'customer', 'klant-thomas-03', 'Thomas Vandenberghe')", (thomas_hash,))
+        
+        # Adviser user - can access all customer data
+        adviser_key = "adviser-demo-key-99999"
+        adviser_hash = hashlib.sha256(adviser_key.encode()).hexdigest()
+        c.execute("INSERT INTO api_user VALUES ('user-adviser', ?, 'adviser', NULL, 'KBC Adviseur')", (adviser_hash,))
+        
+        # Admin user - full access
+        admin_key = "admin-demo-key-00000"
+        admin_hash = hashlib.sha256(admin_key.encode()).hexdigest()
+        c.execute("INSERT INTO api_user VALUES ('user-admin', ?, 'admin', NULL, 'KBC Admin')", (admin_hash,))
+
     conn.commit()
     conn.close()
 
 init_db()
+
+# --- Authentication & Authorization ---
+class AuthenticatedUser(BaseModel):
+    user_id: str
+    role: str  # 'customer', 'adviser', 'admin'
+    klant_id: Optional[str] = None
+    naam: str
+
+def authenticate_user(x_api_key: Optional[str] = Header(None)) -> AuthenticatedUser:
+    """
+    Validates the API key and returns the authenticated user.
+    Raises HTTPException if authentication fails.
+    """
+    if not x_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing authentication credentials",
+            headers={"WWW-Authenticate": "ApiKey"}
+        )
+    
+    # Hash the provided key and look up in database
+    key_hash = hashlib.sha256(x_api_key.encode()).hexdigest()
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, role, klant_id, naam FROM api_user WHERE api_key_hash = ?", (key_hash,))
+    user_row = c.fetchone()
+    conn.close()
+    
+    if not user_row:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "ApiKey"}
+        )
+    
+    return AuthenticatedUser(
+        user_id=user_row["id"],
+        role=user_row["role"],
+        klant_id=user_row["klant_id"],
+        naam=user_row["naam"]
+    )
+
+def authorize_customer_access(user: AuthenticatedUser, requested_klant_id: str):
+    """
+    Verifies that the authenticated user has permission to access the requested customer data.
+    - Customers can only access their own data
+    - Advisers and admins can access any customer data
+    """
+    if user.role == "customer":
+        if user.klant_id != requested_klant_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: You can only access your own customer data"
+            )
+    elif user.role not in ["adviser", "admin"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Insufficient permissions"
+        )
+
+def require_adviser_or_admin(user: AuthenticatedUser):
+    """
+    Verifies that the authenticated user has adviser or admin role.
+    """
+    if user.role not in ["adviser", "admin"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Adviser or admin role required"
+        )
 
 # --- Modellen ---
 class DoelInput(BaseModel):
@@ -117,9 +224,19 @@ class EventInput(BaseModel):
 
 # --- 1. POST /doel ---
 @app.post("/doel")
-def create_or_update_doel(doel: DoelInput):
+def create_or_update_doel(doel: DoelInput, user: AuthenticatedUser = Depends(authenticate_user)):
+    # Verify the user has permission to modify this customer's goal
+    authorize_customer_access(user, doel.klant_id)
+    
     conn = get_db()
     c = conn.cursor()
+    
+    # Verify the customer exists
+    c.execute("SELECT id FROM klant WHERE id = ?", (doel.klant_id,))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Klant niet gevonden")
+    
     c.execute("SELECT id FROM doel WHERE klant_id = ?", (doel.klant_id,))
     row = c.fetchone()
     if row:
@@ -141,7 +258,10 @@ def create_or_update_doel(doel: DoelInput):
 
 # --- 2. GET /kompas/{klant_id} ---
 @app.get("/kompas/{klant_id}")
-def get_kompas(klant_id: str):
+def get_kompas(klant_id: str, user: AuthenticatedUser = Depends(authenticate_user)):
+    # Verify the user has permission to access this customer's data
+    authorize_customer_access(user, klant_id)
+    
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT * FROM klant WHERE id = ?", (klant_id,))
@@ -228,9 +348,19 @@ def get_kompas(klant_id: str):
 
 # --- 3. POST /event ---
 @app.post("/event")
-def trigger_event(event: EventInput):
+def trigger_event(event: EventInput, user: AuthenticatedUser = Depends(authenticate_user)):
+    # Verify the user has permission to create events for this customer
+    authorize_customer_access(user, event.klant_id)
+    
     conn = get_db()
     c = conn.cursor()
+    
+    # Verify the customer exists
+    c.execute("SELECT id FROM klant WHERE id = ?", (event.klant_id,))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Klant niet gevonden")
+    
     c.execute("""
         INSERT INTO plan_event (klant_id, datum, type, omschrijving, bedrag_impact)
         VALUES (?, datetime('now'), ?, ?, ?)
@@ -245,8 +375,13 @@ def trigger_event(event: EventInput):
 
 # --- 4. GET /adviseur/{klant_id} ---
 @app.get("/adviseur/{klant_id}")
-def get_adviseur_dossier(klant_id: str):
-    kompas_data = get_kompas(klant_id)
+def get_adviseur_dossier(klant_id: str, user: AuthenticatedUser = Depends(authenticate_user)):
+    # Adviseur endpoint requires adviser or admin role
+    require_adviser_or_admin(user)
+    
+    # Note: get_kompas now requires authentication, so we need to pass the user
+    # Since we've already verified the user is an adviser/admin, they can access any customer
+    kompas_data = get_kompas(klant_id, user)
     return {
         "adviseur_view": True,
         "dossier": kompas_data,
@@ -258,7 +393,10 @@ def get_adviseur_dossier(klant_id: str):
 
 # --- 5. GET /dashboard ---
 @app.get("/dashboard")
-def get_macro_dashboard():
+def get_macro_dashboard(user: AuthenticatedUser = Depends(authenticate_user)):
+    # Dashboard requires adviser or admin role
+    require_adviser_or_admin(user)
+    
     # Geeft real-time aggregatie over actieve database
     conn = get_db()
     c = conn.cursor()
