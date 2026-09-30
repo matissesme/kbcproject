@@ -30,7 +30,7 @@ window.KBCAura = window.KBCAura || {};
 
   // Centrale State
   var state = {
-    currentTopView: "split", // "split" = Klant + Simulator, "phone_only" = Alleen Klant Mobile, "medewerker" = KBC Medewerker Portefeuille
+    currentTopView: "medewerker", // Klantapp staat op index.html.
     activeCustomerIndex: 0,
     customers: JSON.parse(JSON.stringify(window.KBCAura.PersonasDatabase || [])),
     activeAppTab: "start",
@@ -95,15 +95,8 @@ window.KBCAura = window.KBCAura || {};
           '</div>' +
         '</div>' +
         '<div class="top-view-tabs">' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "split" ? "active" : "") + '" data-view="split">' +
-            '📱 Klantapp &amp; Simulator' +
-          '</button>' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "phone_only" ? "active" : "") + '" data-view="phone_only">' +
-            '📲 Alleen Klant Mobile' +
-          '</button>' +
-          '<button class="view-tab-btn ' + (state.currentTopView === "medewerker" ? "active" : "") + '" data-view="medewerker">' +
-            '👔 KBC Medewerker Portaal (200 klanten)' +
-          '</button>' +
+          '<a class="view-tab-btn" href="index.html">📱 Klantapp</a>' +
+          '<span class="view-tab-btn active">👔 KBC Medewerker Portaal (200 klanten)</span>' +
         '</div>' +
       '</header>';
 
@@ -1142,7 +1135,7 @@ window.KBCAura = window.KBCAura || {};
   // --- Event Handlers & Binding ---
   function bindEvents(root) {
     // Top view switcher (Klantapp vs Medewerker)
-    root.querySelectorAll(".view-tab-btn").forEach(function (btn) {
+    root.querySelectorAll("[data-view]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.currentTopView = btn.getAttribute("data-view");
         if (state.currentTopView !== "medewerker") {
@@ -1246,45 +1239,7 @@ window.KBCAura = window.KBCAura || {};
       btn.addEventListener("click", function () {
         var cid = btn.getAttribute("data-staff-load-persona");
         var c = window.KBCAura.Synthetic200Customers.getById(cid);
-        if (c) {
-          // Zet om naar persona in de klantapp
-          var newCust = {
-            id: c.id,
-            name: c.name,
-            avatar: c.age < 25 ? "🎓" : (c.situation.indexOf("gezin") !== -1 ? "👨‍👩‍👧" : "💼"),
-            age: c.age,
-            city: c.city,
-            situation: c.situation,
-            avgMonthlyIncome3m: c.avgIncome3m,
-            avgMonthlyExpenses3m: c.avgExpenses3m,
-            accounts: {
-              checkingName: "KBC-Plusrekening",
-              checkingIban: c.ibanChecking,
-              checkingBalance: c.checkingBalance,
-              savingsName: "KBC-Spaarrekening (Kompas Doel)",
-              savingsIban: c.ibanSavings,
-              savingsBalance: c.savingsBalance
-            },
-            goals: [
-              {
-                id: "goal-" + c.goalType,
-                type: c.goalType,
-                title: c.goalLabel,
-                targetAmount: c.targetAmount,
-                savedAmount: c.savedAmount,
-                monthsToDeadline: c.monthsToDeadline
-              }
-            ],
-            activeGoalId: "goal-" + c.goalType,
-            transactions: c.transactions,
-            planEvents: []
-          };
-          state.customers.unshift(newCust);
-          state.activeCustomerIndex = 0;
-          state.currentTopView = "split";
-          state.activeAppTab = "kompas";
-          renderAll();
-        }
+        if (c) window.location.href = "index.html?customer=" + encodeURIComponent(c.id);
       });
     });
 
